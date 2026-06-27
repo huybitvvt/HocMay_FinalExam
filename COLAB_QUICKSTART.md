@@ -59,6 +59,18 @@ import pandas as pd
 pd.read_csv('models/model_comparison.csv')
 ```
 
+Đánh giá tự động để lấy nhận xét đưa vào báo cáo:
+
+```bash
+!python evaluate_results.py --models-dir models --out-dir reports
+```
+
+File nhận xét được lưu tại:
+
+```text
+reports/danh_gia_ket_qua.md
+```
+
 ## 7. Chạy Streamlit
 
 ```bash

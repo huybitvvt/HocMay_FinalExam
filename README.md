@@ -93,6 +93,15 @@ Kết quả quan trọng nằm trong `models/` và `reports/`:
 - `models/*_history.png`
 - `reports/dataset_distribution.csv`
 - `reports/dataset_distribution.png`
+- `reports/danh_gia_ket_qua.md`
+
+Sau khi train xong, chạy đánh giá tự động:
+
+```bash
+python evaluate_results.py --models-dir models --out-dir reports
+```
+
+Script này chọn model tốt nhất theo macro-F1, liệt kê lớp yếu, các cặp lớp dễ nhầm và cảnh báo nếu kết quả có dấu hiệu bất thường.
 
 ## Chạy giao diện Streamlit
 
