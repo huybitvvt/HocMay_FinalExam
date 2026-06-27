@@ -1,0 +1,10 @@
+__pycache__/
+.ipynb_checkpoints/
+garbage_classification/
+models/
+feedback/
+reports/
+garbage_classification_with_feedback/
+*.h5
+*.keras
+*.pyc
