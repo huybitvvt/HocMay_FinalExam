@@ -24,39 +24,59 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--models", nargs="+", default=["mobilenetv2", "efficientnetb0"])
     parser.add_argument("--fine-tune-layers", type=int, default=30)
+    parser.add_argument("--validation-split", type=float, default=0.2)
     return parser.parse_args()
 
 
-def build_datasets(data_dir: str, batch_size: int):
-    train_ds = tf.keras.utils.image_dataset_from_directory(
+def collect_stratified_files(data_dir: str, validation_split: float, seed: int = 42):
+    data_path = Path(data_dir)
+    class_names = sorted(path.name for path in data_path.iterdir() if path.is_dir())
+    rng = np.random.default_rng(seed)
+    train_paths, train_labels, val_paths, val_labels = [], [], [], []
+    train_counts = []
+
+    for label, class_name in enumerate(class_names):
+        class_dir = data_path / class_name
+        files = sorted(
+            str(path)
+            for path in class_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTS
+        )
+        if not files:
+            raise ValueError(f"Lớp không có ảnh: {class_name}")
+        rng.shuffle(files)
+        val_count = max(1, int(round(len(files) * validation_split)))
+        val_files = files[:val_count]
+        train_files = files[val_count:]
+        train_counts.append(len(train_files))
+        train_paths.extend(train_files)
+        train_labels.extend([label] * len(train_files))
+        val_paths.extend(val_files)
+        val_labels.extend([label] * len(val_files))
+
+    train_idx = rng.permutation(len(train_paths))
+    train_paths = [train_paths[i] for i in train_idx]
+    train_labels = [train_labels[i] for i in train_idx]
+    return class_names, train_paths, train_labels, val_paths, val_labels, train_counts
+
+
+def load_image(path, label):
+    image = tf.io.read_file(path)
+    image = tf.image.decode_image(image, channels=3, expand_animations=False)
+    image.set_shape([None, None, 3])
+    image = tf.image.resize(image, IMG_SIZE)
+    return image, label
+
+
+def build_datasets(data_dir: str, batch_size: int, validation_split: float):
+    class_names, train_paths, train_labels, val_paths, val_labels, train_counts = collect_stratified_files(
         data_dir,
-        validation_split=0.2,
-        subset="training",
-        seed=42,
-        image_size=IMG_SIZE,
-        batch_size=batch_size,
-        label_mode="int",
+        validation_split,
     )
-    val_ds = tf.keras.utils.image_dataset_from_directory(
-        data_dir,
-        validation_split=0.2,
-        subset="validation",
-        seed=42,
-        image_size=IMG_SIZE,
-        batch_size=batch_size,
-        label_mode="int",
-        shuffle=False,
-    )
-    class_names = train_ds.class_names
-    class_counts = []
-    for class_name in class_names:
-        class_dir = Path(data_dir) / class_name
-        count = sum(1 for path in class_dir.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTS)
-        class_counts.append(count)
-    total = sum(class_counts)
+    total = sum(train_counts)
     class_weight = {
         idx: float(total / (len(class_names) * count))
-        for idx, count in enumerate(class_counts)
+        for idx, count in enumerate(train_counts)
         if count > 0
     }
 
@@ -70,9 +90,19 @@ def build_datasets(data_dir: str, batch_size: int):
         name="augmentation",
     )
 
+    train_ds = tf.data.Dataset.from_tensor_slices((train_paths, train_labels))
+    train_ds = train_ds.map(load_image, num_parallel_calls=AUTOTUNE)
+    train_ds = train_ds.batch(batch_size)
     train_ds = train_ds.map(lambda x, y: (augmentation(x, training=True), y), num_parallel_calls=AUTOTUNE)
     train_ds = train_ds.prefetch(AUTOTUNE)
-    val_ds = val_ds.prefetch(AUTOTUNE)
+
+    val_ds = tf.data.Dataset.from_tensor_slices((val_paths, val_labels))
+    val_ds = val_ds.map(load_image, num_parallel_calls=AUTOTUNE)
+    val_ds = val_ds.batch(batch_size).prefetch(AUTOTUNE)
+
+    print(f"Found {len(train_paths) + len(val_paths)} files belonging to {len(class_names)} classes.")
+    print(f"Using {len(train_paths)} files for training.")
+    print(f"Using {len(val_paths)} files for validation.")
     return train_ds, val_ds, class_names, class_weight
 
 
@@ -162,8 +192,16 @@ def evaluate_and_save(model, val_ds, class_names, out_dir: Path, model_name: str
     y_true = np.concatenate([labels.numpy() for _, labels in val_ds], axis=0)
     probs = model.predict(val_ds, verbose=0)
     y_pred = np.argmax(probs, axis=1)
-    report = classification_report(y_true, y_pred, target_names=class_names, output_dict=True, zero_division=0)
-    cm = confusion_matrix(y_true, y_pred)
+    labels = list(range(len(class_names)))
+    report = classification_report(
+        y_true,
+        y_pred,
+        labels=labels,
+        target_names=class_names,
+        output_dict=True,
+        zero_division=0,
+    )
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
 
     pd.DataFrame(report).transpose().to_csv(out_dir / f"{model_name}_classification_report.csv", encoding="utf-8-sig")
     pd.DataFrame(cm, index=class_names, columns=class_names).to_csv(out_dir / f"{model_name}_confusion_matrix.csv", encoding="utf-8-sig")
@@ -191,7 +229,11 @@ def main() -> None:
     args = parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    train_ds, val_ds, class_names, class_weight = build_datasets(args.data_dir, args.batch_size)
+    train_ds, val_ds, class_names, class_weight = build_datasets(
+        args.data_dir,
+        args.batch_size,
+        args.validation_split,
+    )
     (out_dir / "class_names.json").write_text(json.dumps(class_names, ensure_ascii=False, indent=2), encoding="utf-8")
 
     results = []
