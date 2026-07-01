@@ -110,16 +110,16 @@ def create_model(name: str, num_classes: int) -> tf.keras.Model:
     name = name.lower()
     if name == "mobilenetv2":
         base = tf.keras.applications.MobileNetV2(include_top=False, weights="imagenet", input_shape=(*IMG_SIZE, 3))
-        preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
+        preprocess = tf.keras.layers.Rescaling(1.0 / 127.5, offset=-1.0, name="mobilenetv2_preprocess")
     elif name == "efficientnetb0":
         base = tf.keras.applications.EfficientNetB0(include_top=False, weights="imagenet", input_shape=(*IMG_SIZE, 3))
-        preprocess = tf.keras.applications.efficientnet.preprocess_input
+        preprocess = tf.keras.layers.Activation("linear", name="efficientnetb0_preprocess")
     else:
         raise ValueError(f"Unsupported model: {name}")
 
     base.trainable = False
     inputs = tf.keras.Input(shape=(*IMG_SIZE, 3))
-    x = tf.keras.layers.Lambda(preprocess, name="preprocess")(inputs)
+    x = preprocess(inputs)
     x = base(x, training=False)
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
     x = tf.keras.layers.Dropout(0.25)(x)

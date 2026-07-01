@@ -21,7 +21,17 @@ st.set_page_config(page_title="Phân loại rác thải", page_icon="♻", layou
 
 @st.cache_resource
 def load_model(model_file: str):
-    return tf.keras.models.load_model(model_file)
+    try:
+        return tf.keras.models.load_model(model_file, compile=False)
+    except TypeError:
+        # Backward-compatible loader for older models saved with Lambda(preprocess_input).
+        # The current best model is EfficientNetB0, whose preprocess_input is identity-like.
+        return tf.keras.models.load_model(
+            model_file,
+            custom_objects={"preprocess_input": tf.keras.applications.efficientnet.preprocess_input},
+            compile=False,
+            safe_mode=False,
+        )
 
 
 def render_advice(class_name: str, confidence: float, confidence_threshold: float) -> None:
