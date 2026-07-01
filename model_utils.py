@@ -45,28 +45,22 @@ def predict_image(model: tf.keras.Model, image: Image.Image, class_names: list[s
 
 
 def find_last_conv_layer(model: tf.keras.Model) -> str:
-    for layer in reversed(model.layers):
-        output_shape = getattr(layer, "output_shape", None)
-        if output_shape is None and hasattr(layer, "output"):
-            output_shape = tuple(layer.output.shape)
-        if output_shape is not None and len(output_shape) == 4:
-            return layer.name
-        if isinstance(layer, tf.keras.layers.Conv2D):
-            return layer.name
-    raise ValueError("Không tìm thấy lớp Conv2D để tạo Grad-CAM.")
+    conv_names = []
+    for layer in model.layers:
+        if hasattr(layer, "layers"):
+            conv_names.extend(sub_layer.name for sub_layer in layer.layers if isinstance(sub_layer, tf.keras.layers.Conv2D))
+        elif isinstance(layer, tf.keras.layers.Conv2D):
+            conv_names.append(layer.name)
+    if not conv_names:
+        raise ValueError("Không tìm thấy lớp Conv2D để tạo Grad-CAM.")
+    return conv_names[-1]
 
 
-def _locate_layer(model: tf.keras.Model, layer_name: str) -> tf.keras.layers.Layer:
-    try:
-        return model.get_layer(layer_name)
-    except ValueError:
-        for layer in model.layers:
-            if hasattr(layer, "get_layer"):
-                try:
-                    return layer.get_layer(layer_name)
-                except ValueError:
-                    continue
-    raise
+def _find_backbone(model: tf.keras.Model) -> tf.keras.Model:
+    nested_models = [layer for layer in model.layers if isinstance(layer, tf.keras.Model)]
+    if not nested_models:
+        raise ValueError("Model không có backbone CNN lồng bên trong để tạo Grad-CAM.")
+    return nested_models[0]
 
 
 def make_gradcam_heatmap(
@@ -79,11 +73,19 @@ def make_gradcam_heatmap(
     if layer_name is None:
         layer_name = find_last_conv_layer(model)
 
-    target_layer = _locate_layer(model, layer_name)
-    grad_model = tf.keras.models.Model(model.inputs, [target_layer.output, model.output])
+    backbone = _find_backbone(model)
+    classifier_layers = model.layers[model.layers.index(backbone) + 1 :]
+    target_layer = backbone.get_layer(layer_name)
+    backbone_grad_model = tf.keras.models.Model(backbone.inputs, [target_layer.output, backbone.output])
 
     with tf.GradientTape() as tape:
-        conv_outputs, predictions = grad_model(batch)
+        x = batch
+        for layer in model.layers[1 : model.layers.index(backbone)]:
+            x = layer(x)
+        conv_outputs, x = backbone_grad_model(x)
+        for layer in classifier_layers:
+            x = layer(x)
+        predictions = x
         if class_index is None:
             class_index = int(tf.argmax(predictions[0]))
         loss = predictions[:, class_index]

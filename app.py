@@ -38,7 +38,7 @@ def render_advice(class_name: str, confidence: float, confidence_threshold: floa
     advice = get_waste_advice(class_name)
     st.markdown(
         f"""
-        <div style="border-left: 6px solid {advice['color']}; padding: 0.75rem 1rem; background: #f7f7f7;">
+        <div style="border-left: 6px solid {advice['color']}; padding: 0.75rem 1rem; background: rgba(255,255,255,0.06); color: inherit; border-radius: 8px;">
             <h3 style="margin: 0 0 .25rem 0;">{advice['label']}</h3>
             <div><b>Nhóm xử lý:</b> {advice['group']}</div>
             <div><b>Nơi bỏ:</b> {advice['bin']}</div>
