@@ -95,11 +95,19 @@ with st.sidebar:
     st.markdown("- Mở bảng top-3 để nói về sai số giữa các lớp giống nhau.")
     st.markdown("- Sửa nhãn sai để chứng minh vòng lặp cải thiện dữ liệu.")
 
-uploaded_files = st.file_uploader(
-    "Tải ảnh rác tự chụp hoặc nhiều ảnh để kiểm thử",
-    type=["jpg", "jpeg", "png", "webp"],
-    accept_multiple_files=True,
-)
+upload_tab, camera_tab = st.tabs(["Tải ảnh", "Chụp ảnh"])
+with upload_tab:
+    uploaded_files = st.file_uploader(
+        "Tải ảnh rác tự chụp hoặc nhiều ảnh để kiểm thử",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=True,
+    )
+with camera_tab:
+    camera_file = st.camera_input("Chụp ảnh rác bằng camera")
+
+input_files = list(uploaded_files or [])
+if camera_file is not None:
+    input_files.append(camera_file)
 
 model_file = Path(model_path)
 if not model_file.exists():
@@ -109,11 +117,11 @@ if not model_file.exists():
 model = load_model(str(model_file))
 class_names = load_class_names(model_file)
 
-if not uploaded_files:
+if not input_files:
     st.stop()
 
 summary_rows = []
-for idx, file in enumerate(uploaded_files):
+for idx, file in enumerate(input_files):
     image = Image.open(file)
     quality = assess_image_quality(image)
     result = predict_image(model, image, class_names)

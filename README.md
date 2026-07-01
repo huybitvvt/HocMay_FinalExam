@@ -10,7 +10,7 @@
 - Fine-tuning transfer learning.
 - Xuất `classification_report`, `confusion_matrix`, biểu đồ accuracy/loss và bảng so sánh model.
 - Giao diện Streamlit tiếng Việt.
-- Upload một hoặc nhiều ảnh rác tự chụp.
+- Upload một hoặc nhiều ảnh rác tự chụp, hoặc chụp trực tiếp bằng camera trình duyệt.
 - Gợi ý xử lý rác: tái chế, hữu cơ, nguy hại, tái sử dụng, rác khác.
 - Grad-CAM để giải thích vùng ảnh model chú ý.
 - Cảnh báo khi độ tin cậy thấp.
