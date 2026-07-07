@@ -88,12 +88,6 @@ with st.sidebar:
     confidence_threshold = st.slider("Ngưỡng cảnh báo độ tin cậy", 0.30, 0.95, 0.65, 0.05)
     show_gradcam = st.checkbox("Hiển thị Grad-CAM", value=True)
     save_session_log = st.checkbox("Lưu nhật ký kiểm thử", value=True)
-    st.divider()
-    st.markdown("**Gợi ý demo bảo vệ**")
-    st.markdown("- Dùng ảnh rõ và ảnh nhiễu để so sánh độ tin cậy.")
-    st.markdown("- Chỉ ra Grad-CAM có tập trung vào vật thể hay nền.")
-    st.markdown("- Mở bảng top-3 để nói về sai số giữa các lớp giống nhau.")
-    st.markdown("- Sửa nhãn sai để chứng minh vòng lặp cải thiện dữ liệu.")
 
 upload_tab, camera_tab = st.tabs(["Tải ảnh", "Chụp ảnh"])
 with upload_tab:
