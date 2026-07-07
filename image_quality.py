@@ -45,3 +45,29 @@ def recycling_cleanliness_hint(class_name: str, quality: dict) -> str:
     if quality["contrast"] < 45 or quality["brightness"] < 70:
         return "Cần kiểm tra lại: vật thể có thể bị bẩn hoặc ánh sáng làm khó nhận biết. Nên rửa/làm sạch trước khi tái chế nếu dính thức ăn."
     return "Có thể tái chế nếu vật thể khô, ít dính thức ăn/dầu mỡ và đã tách khỏi vật liệu khác."
+
+
+def multi_object_hint(image: Image.Image) -> dict:
+    arr = np.asarray(image.convert("RGB"))
+    small = cv2.resize(arr, (320, 320))
+    gray = cv2.cvtColor(small, cv2.COLOR_RGB2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 60, 160)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    image_area = small.shape[0] * small.shape[1]
+    large_contours = [
+        contour
+        for contour in contours
+        if 0.015 <= cv2.contourArea(contour) / image_area <= 0.45
+    ]
+    object_like_count = len(large_contours)
+    has_warning = object_like_count >= 4
+    if has_warning:
+        message = "Ảnh có thể chứa nhiều vật thể. Kết quả chỉ áp dụng cho vật thể nổi bật nhất."
+    else:
+        message = "Không phát hiện dấu hiệu rõ ràng của nhiều vật thể."
+    return {
+        "object_like_count": object_like_count,
+        "has_warning": has_warning,
+        "message": message,
+    }

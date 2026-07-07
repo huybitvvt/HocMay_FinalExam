@@ -23,7 +23,10 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     total = len(summary_df)
     low_conf = int((summary_df["Cảnh báo"] == "Thấp").sum()) if total else 0
+    uncertain = int((summary_df.get("Trạng thái", pd.Series(dtype=str)) == "Cần kiểm tra").sum()) if total else 0
+    multi_object = int((summary_df.get("Nhiều vật thể", pd.Series(dtype=str)) == "Có thể").sum()) if total else 0
     group_counts = summary_df["Nhóm"].value_counts().to_dict() if total else {}
+    conclusion = "Tất cả ảnh đều đủ tin cậy để tham khảo hướng xử lý." if uncertain == 0 else "Có ảnh cần kiểm tra lại trước khi xử lý rác."
 
     rows = []
     for _, row in summary_df.iterrows():
@@ -33,7 +36,10 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
             f"<td>{html.escape(str(row['Dự đoán']))}</td>"
             f"<td>{html.escape(str(row['Nhóm']))}</td>"
             f"<td>{float(row['Độ tin cậy']) * 100:.2f}%</td>"
+            f"<td>{html.escape(str(row.get('Trạng thái', '')))}</td>"
+            f"<td>{html.escape(str(row.get('Kết luận xử lý', '')))}</td>"
             f"<td>{html.escape(str(row.get('Chất lượng ảnh', '')))}</td>"
+            f"<td>{html.escape(str(row.get('Nhiều vật thể', '')))}</td>"
             f"<td>{html.escape(str(row['Cảnh báo']))}</td>"
             "</tr>"
         )
@@ -62,14 +68,18 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
   <div class="cards">
     <div class="card"><div>Tổng ảnh</div><div class="value">{total}</div></div>
     <div class="card"><div>Cảnh báo thấp</div><div class="value">{low_conf}</div></div>
+    <div class="card"><div>Cần kiểm tra</div><div class="value">{uncertain}</div></div>
+    <div class="card"><div>Có thể nhiều vật thể</div><div class="value">{multi_object}</div></div>
     <div class="card"><div>Tỷ lệ cần kiểm tra</div><div class="value">{(low_conf / total * 100 if total else 0):.1f}%</div></div>
   </div>
+  <h2>Kết luận phiên kiểm thử</h2>
+  <p>{html.escape(conclusion)}</p>
   <h2>Phân bố nhóm rác</h2>
   <ul>{group_items}</ul>
   <h2>Chi tiết dự đoán</h2>
   <table>
     <thead>
-      <tr><th>Ảnh</th><th>Dự đoán</th><th>Nhóm</th><th>Độ tin cậy</th><th>Chất lượng ảnh</th><th>Cảnh báo</th></tr>
+      <tr><th>Ảnh</th><th>Dự đoán</th><th>Nhóm</th><th>Độ tin cậy</th><th>Trạng thái</th><th>Kết luận xử lý</th><th>Chất lượng ảnh</th><th>Nhiều vật thể</th><th>Cảnh báo</th></tr>
     </thead>
     <tbody>{''.join(rows)}</tbody>
   </table>

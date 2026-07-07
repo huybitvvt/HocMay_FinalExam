@@ -10,8 +10,9 @@ import streamlit as st
 import tensorflow as tf
 from PIL import Image
 
-from image_quality import assess_image_quality, recycling_cleanliness_hint
-from model_utils import load_class_names, make_gradcam_heatmap, overlay_gradcam, predict_image, uncertainty_message
+from app_insights import disposal_conclusion, prediction_status, read_feedback_stats, read_model_summary
+from image_quality import assess_image_quality, multi_object_hint, recycling_cleanliness_hint
+from model_utils import load_class_names, make_gradcam_heatmap, overlay_gradcam, predict_image
 from reporting import append_prediction_log, build_html_report, save_html_report
 from waste_rules import VI_LABELS, get_waste_advice
 
@@ -34,7 +35,7 @@ def load_model(model_file: str):
         )
 
 
-def render_advice(class_name: str, confidence: float, confidence_threshold: float) -> None:
+def render_advice(class_name: str) -> None:
     advice = get_waste_advice(class_name)
     st.markdown(
         f"""
@@ -48,10 +49,62 @@ def render_advice(class_name: str, confidence: float, confidence_threshold: floa
         """,
         unsafe_allow_html=True,
     )
-    if confidence < confidence_threshold:
-        st.warning(uncertainty_message(confidence))
+
+
+def render_conclusion(conclusion: dict) -> None:
+    st.markdown(
+        f"""
+        <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 0.9rem 1rem; background: rgba(31,138,91,0.10);">
+            <div><b>Loại rác:</b> {conclusion['waste_type']}</div>
+            <div><b>Nhóm xử lý:</b> {conclusion['group']}</div>
+            <div><b>Mức rủi ro:</b> {conclusion['risk']}</div>
+            <div><b>Nơi xử lý:</b> {conclusion['destination']}</div>
+            <div><b>Hành động:</b> {conclusion['action']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_model_information() -> None:
+    info = read_model_summary()
+    best = info["best"]
+    st.subheader("Thông tin mô hình")
+    if best:
+        col_a, col_b, col_c, col_d = st.columns(4)
+        col_a.metric("Model đang chọn", str(best.get("model", "")).upper())
+        col_b.metric("Accuracy", f"{float(best.get('accuracy', 0)) * 100:.2f}%")
+        col_c.metric("Macro-F1", f"{float(best.get('macro_f1', 0)) * 100:.2f}%")
+        col_d.metric("Weighted-F1", f"{float(best.get('weighted_f1', 0)) * 100:.2f}%")
     else:
-        st.success(uncertainty_message(confidence))
+        st.info("Chưa tìm thấy `models/model_comparison.csv`.")
+
+    cols = st.columns(2)
+    cols[0].metric("Số lớp", len(info["classes"]) if info["classes"] else 0)
+    cols[1].metric("Số ảnh dataset", info["total_images"] or "Chưa có")
+
+    if not info["comparison"].empty:
+        st.dataframe(info["comparison"], hide_index=True, use_container_width=True)
+    if not info["dataset"].empty:
+        st.bar_chart(info["dataset"], x="class", y="count")
+
+
+def render_feedback_statistics() -> None:
+    stats = read_feedback_stats()
+    st.subheader("Phản hồi dữ liệu")
+    st.metric("Số ảnh đã lưu phản hồi", stats["total"])
+    if stats["total"] == 0:
+        st.info("Chưa có phản hồi. Khi model dự đoán sai, mở mục phản hồi trong kết quả và lưu nhãn đúng.")
+        return
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**Nhãn được sửa nhiều nhất**")
+        st.dataframe(stats["top_corrected"], hide_index=True, use_container_width=True)
+    with col_b:
+        st.markdown("**Cặp nhầm lẫn thường gặp**")
+        st.dataframe(stats["top_pairs"], hide_index=True, use_container_width=True)
+    st.markdown("**Nhật ký phản hồi**")
+    st.dataframe(stats["log"], hide_index=True, use_container_width=True)
 
 
 def save_feedback(uploaded_file, predicted_class: str, corrected_class: str, confidence: float) -> Path:
@@ -89,124 +142,150 @@ with st.sidebar:
     show_gradcam = st.checkbox("Hiển thị Grad-CAM", value=True)
     save_session_log = st.checkbox("Lưu nhật ký kiểm thử", value=True)
 
-upload_tab, camera_tab = st.tabs(["Tải ảnh", "Chụp ảnh"])
-with upload_tab:
-    uploaded_files = st.file_uploader(
-        "Tải ảnh rác tự chụp hoặc nhiều ảnh để kiểm thử",
-        type=["jpg", "jpeg", "png", "webp"],
-        accept_multiple_files=True,
-    )
-with camera_tab:
-    camera_file = st.camera_input("Chụp ảnh rác bằng camera")
+classify_tab, model_tab, feedback_tab = st.tabs(["Phân loại", "Thông tin mô hình", "Phản hồi dữ liệu"])
 
-input_files = list(uploaded_files or [])
-if camera_file is not None:
-    input_files.append(camera_file)
+with model_tab:
+    render_model_information()
 
-model_file = Path(model_path)
-if not model_file.exists():
-    st.info("Chưa có model. Hãy chạy notebook Colab để tạo `models/best_model.keras`, sau đó tải về cùng thư mục app.")
-    st.stop()
+with feedback_tab:
+    render_feedback_statistics()
 
-model = load_model(str(model_file))
-class_names = load_class_names(model_file)
-
-if not input_files:
-    st.stop()
-
-summary_rows = []
-for idx, file in enumerate(input_files):
-    image = Image.open(file)
-    quality = assess_image_quality(image)
-    result = predict_image(model, image, class_names)
-    advice = get_waste_advice(result["class_name"])
-    cleanliness_hint = recycling_cleanliness_hint(result["class_name"], quality)
-    summary_rows.append(
-        {
-            "Ảnh": file.name,
-            "Dự đoán": advice["label"],
-            "Nhóm": advice["group"],
-            "Độ tin cậy": round(result["confidence"], 4),
-            "Chất lượng ảnh": quality["verdict"],
-            "Gợi ý độ sạch": cleanliness_hint,
-            "Cảnh báo": "Thấp" if result["confidence"] < confidence_threshold else "OK",
-        }
-    )
-
-    left, right = st.columns([1, 1.1], vertical_alignment="top")
-    with left:
-        st.image(image, caption=file.name, use_container_width=True)
-        if show_gradcam:
-            try:
-                heatmap = make_gradcam_heatmap(model, image)
-                st.image(overlay_gradcam(image, heatmap), caption="Grad-CAM: vùng model chú ý", use_container_width=True)
-            except Exception as exc:
-                st.warning(f"Không tạo được Grad-CAM cho model này: {exc}")
-
-    with right:
-        st.metric("Kết quả", advice["label"], f"{result['confidence'] * 100:.1f}%")
-        render_advice(result["class_name"], result["confidence"], confidence_threshold)
-        if quality["has_warning"]:
-            st.warning(f"Chất lượng ảnh: {quality['verdict']}")
-        else:
-            st.info(f"Chất lượng ảnh: {quality['verdict']}")
-        st.caption(
-            f"Blur: {quality['blur_score']} | Sáng: {quality['brightness']} | Tương phản: {quality['contrast']}"
+with classify_tab:
+    upload_tab, camera_tab = st.tabs(["Tải ảnh", "Chụp ảnh"])
+    with upload_tab:
+        uploaded_files = st.file_uploader(
+            "Tải ảnh rác tự chụp hoặc nhiều ảnh để kiểm thử",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=True,
         )
-        st.info(cleanliness_hint)
-        top3 = pd.DataFrame(result["ranking"][:3])
-        top3["Tên tiếng Việt"] = top3["class_name"].map(lambda name: get_waste_advice(name)["label"])
-        top3["Xác suất"] = top3["probability"].map(lambda value: f"{value * 100:.2f}%")
-        st.dataframe(top3[["Tên tiếng Việt", "Xác suất"]], hide_index=True, use_container_width=True)
+    with camera_tab:
+        camera_file = st.camera_input("Chụp ảnh rác bằng camera")
 
-        with st.expander("Phản hồi nếu model dự đoán sai"):
-            corrected_label = st.selectbox(
-                "Nhãn đúng",
-                options=class_names,
-                index=class_names.index(result["class_name"]),
-                format_func=lambda name: VI_LABELS.get(name, name),
-                key=f"correct_{idx}_{file.name}",
+    input_files = list(uploaded_files or [])
+    if camera_file is not None:
+        input_files.append(camera_file)
+
+    model_file = Path(model_path)
+    if not model_file.exists():
+        st.info("Chưa có model. Hãy tạo hoặc copy `models/best_model.keras` vào cùng thư mục app.")
+    elif not input_files:
+        st.info("Tải ảnh lên hoặc chụp ảnh để bắt đầu phân loại.")
+    else:
+        model = load_model(str(model_file))
+        class_names = load_class_names(model_file)
+        summary_rows = []
+
+        for idx, file in enumerate(input_files):
+            image = Image.open(file)
+            quality = assess_image_quality(image)
+            multi_object = multi_object_hint(image)
+            result = predict_image(model, image, class_names)
+            status = prediction_status(result["ranking"], confidence_threshold)
+            advice = get_waste_advice(result["class_name"])
+            conclusion = disposal_conclusion(advice, result["confidence"], status)
+            cleanliness_hint = recycling_cleanliness_hint(result["class_name"], quality)
+            warning_label = "Thấp" if status["is_uncertain"] else "OK"
+            summary_rows.append(
+                {
+                    "Ảnh": file.name,
+                    "Dự đoán": advice["label"],
+                    "Nhóm": advice["group"],
+                    "Độ tin cậy": round(result["confidence"], 4),
+                    "Trạng thái": status["status"],
+                    "Chênh lệch top-2": round(status["margin"], 4),
+                    "Mức rủi ro": conclusion["risk"],
+                    "Kết luận xử lý": f"{conclusion['destination']} - {conclusion['action']}",
+                    "Chất lượng ảnh": quality["verdict"],
+                    "Nhiều vật thể": "Có thể" if multi_object["has_warning"] else "Không",
+                    "Gợi ý độ sạch": cleanliness_hint,
+                    "Cảnh báo": warning_label,
+                }
             )
-            if st.button("Lưu ảnh vào dữ liệu phản hồi", key=f"save_{idx}_{file.name}"):
-                saved_path = save_feedback(file, result["class_name"], corrected_label, result["confidence"])
-                st.success(f"Đã lưu: {saved_path}")
-    st.divider()
 
-if summary_rows:
-    summary_df = pd.DataFrame(summary_rows)
-    if save_session_log:
-        session_key = hashlib.sha1(json.dumps(summary_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-        if st.session_state.get("last_logged_session") != session_key:
-            log_path = append_prediction_log(summary_rows)
-            st.session_state["last_logged_session"] = session_key
-            st.session_state["last_log_path"] = str(log_path)
-        st.caption(f"Nhật ký kiểm thử: {st.session_state.get('last_log_path', 'chưa lưu')}")
+            left, right = st.columns([1, 1.1], vertical_alignment="top")
+            with left:
+                st.image(image, caption=file.name, use_container_width=True)
+                if show_gradcam:
+                    try:
+                        heatmap = make_gradcam_heatmap(model, image)
+                        st.image(overlay_gradcam(image, heatmap), caption="Grad-CAM: vùng model chú ý", use_container_width=True)
+                        st.caption("Grad-CAM dùng để kiểm tra model đang tập trung vào vật thể hay nền ảnh.")
+                    except Exception as exc:
+                        st.warning(f"Không tạo được Grad-CAM cho model này: {exc}")
 
-    st.subheader("Tổng hợp kiểm thử")
-    col_a, col_b, col_c = st.columns(3)
-    col_a.metric("Số ảnh", len(summary_df))
-    col_b.metric("Cảnh báo thấp", int((summary_df["Cảnh báo"] == "Thấp").sum()))
-    col_c.metric("Số nhóm rác", summary_df["Nhóm"].nunique())
+            with right:
+                st.metric("Kết quả", advice["label"], f"{result['confidence'] * 100:.1f}%")
+                render_conclusion(conclusion)
+                if status["is_uncertain"]:
+                    st.warning(status["message"])
+                else:
+                    st.success(status["message"])
+                render_advice(result["class_name"])
+                if quality["has_warning"]:
+                    st.warning(f"Chất lượng ảnh: {quality['verdict']}")
+                else:
+                    st.info(f"Chất lượng ảnh: {quality['verdict']}")
+                st.caption(
+                    f"Blur: {quality['blur_score']} | Sáng: {quality['brightness']} | Tương phản: {quality['contrast']}"
+                )
+                if multi_object["has_warning"]:
+                    st.warning(multi_object["message"])
+                else:
+                    st.caption(multi_object["message"])
+                st.info(cleanliness_hint)
+                top3 = pd.DataFrame(result["ranking"][:3])
+                top3["Tên tiếng Việt"] = top3["class_name"].map(lambda name: get_waste_advice(name)["label"])
+                top3["Xác suất"] = top3["probability"].map(lambda value: f"{value * 100:.2f}%")
+                st.dataframe(top3[["Tên tiếng Việt", "Xác suất"]], hide_index=True, use_container_width=True)
 
-    st.dataframe(summary_df, hide_index=True, use_container_width=True)
-    group_df = summary_df["Nhóm"].value_counts().reset_index()
-    group_df.columns = ["Nhóm", "Số lượng"]
-    st.bar_chart(group_df, x="Nhóm", y="Số lượng")
+                with st.expander("Phản hồi nếu model dự đoán sai"):
+                    corrected_label = st.selectbox(
+                        "Nhãn đúng",
+                        options=class_names,
+                        index=class_names.index(result["class_name"]),
+                        format_func=lambda name: VI_LABELS.get(name, name),
+                        key=f"correct_{idx}_{file.name}",
+                    )
+                    if st.button("Lưu ảnh vào dữ liệu phản hồi", key=f"save_{idx}_{file.name}"):
+                        saved_path = save_feedback(file, result["class_name"], corrected_label, result["confidence"])
+                        st.success(f"Đã lưu: {saved_path}")
+            st.divider()
 
-    csv_bytes = summary_df.to_csv(index=False).encode("utf-8-sig")
-    html_report = build_html_report(summary_df)
-    st.download_button(
-        "Tải CSV kết quả kiểm thử",
-        csv_bytes,
-        file_name="ket_qua_kiem_thu_rac.csv",
-        mime="text/csv",
-    )
-    st.download_button(
-        "Tải báo cáo HTML",
-        html_report.encode("utf-8"),
-        file_name="bao_cao_kiem_thu_rac.html",
-        mime="text/html",
-    )
-    if st.button("Lưu báo cáo HTML vào thư mục reports"):
-        report_path = save_html_report(summary_df)
-        st.success(f"Đã lưu báo cáo: {report_path}")
+        summary_df = pd.DataFrame(summary_rows)
+        if save_session_log:
+            session_key = hashlib.sha1(json.dumps(summary_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+            if st.session_state.get("last_logged_session") != session_key:
+                log_path = append_prediction_log(summary_rows)
+                st.session_state["last_logged_session"] = session_key
+                st.session_state["last_log_path"] = str(log_path)
+            st.caption(f"Nhật ký kiểm thử: {st.session_state.get('last_log_path', 'chưa lưu')}")
+
+        st.subheader("Tổng hợp kiểm thử")
+        col_a, col_b, col_c, col_d = st.columns(4)
+        col_a.metric("Số ảnh", len(summary_df))
+        col_b.metric("Cần kiểm tra", int((summary_df["Trạng thái"] == "Cần kiểm tra").sum()))
+        col_c.metric("Số nhóm rác", summary_df["Nhóm"].nunique())
+        col_d.metric("Có thể nhiều vật thể", int((summary_df["Nhiều vật thể"] == "Có thể").sum()))
+
+        st.dataframe(summary_df, hide_index=True, use_container_width=True)
+        group_df = summary_df["Nhóm"].value_counts().reset_index()
+        group_df.columns = ["Nhóm", "Số lượng"]
+        st.bar_chart(group_df, x="Nhóm", y="Số lượng")
+
+        csv_bytes = summary_df.to_csv(index=False).encode("utf-8-sig")
+        html_report = build_html_report(summary_df)
+        st.download_button(
+            "Tải CSV kết quả kiểm thử",
+            csv_bytes,
+            file_name="ket_qua_kiem_thu_rac.csv",
+            mime="text/csv",
+        )
+        st.download_button(
+            "Tải báo cáo HTML",
+            html_report.encode("utf-8"),
+            file_name="bao_cao_kiem_thu_rac.html",
+            mime="text/html",
+        )
+        if st.button("Lưu báo cáo HTML vào thư mục reports"):
+            report_path = save_html_report(summary_df)
+            st.success(f"Đã lưu báo cáo: {report_path}")

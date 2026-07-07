@@ -14,11 +14,16 @@
 - Gợi ý xử lý rác: tái chế, hữu cơ, nguy hại, tái sử dụng, rác khác.
 - Grad-CAM để giải thích vùng ảnh model chú ý.
 - Cảnh báo khi độ tin cậy thấp.
+- Cảnh báo khi top-1 và top-2 quá gần nhau, tránh ép nhãn khi mô hình chưa chắc chắn.
 - Đánh giá chất lượng ảnh: mờ, quá tối, quá sáng, tương phản thấp.
+- Cảnh báo ảnh có thể chứa nhiều vật thể; kết quả chỉ áp dụng cho vật thể nổi bật nhất.
 - Gợi ý độ sạch tái chế cho giấy, nhựa, kim loại, thủy tinh.
+- Khối kết luận xử lý rác: loại rác, nhóm xử lý, mức rủi ro, nơi bỏ, hành động cần làm.
+- Tab thông tin mô hình: model được chọn, accuracy, macro-F1, weighted-F1, số lớp và phân bố dataset.
 - Lưu nhật ký kiểm thử vào `reports/prediction_log.csv`.
-- Xuất CSV và HTML báo cáo kiểm thử.
+- Xuất CSV và HTML báo cáo kiểm thử, có thống kê nhóm rác, cảnh báo không chắc chắn và kết luận phiên kiểm thử.
 - Người dùng sửa nhãn sai, app lưu ảnh vào `feedback/` để tái huấn luyện.
+- Tab phản hồi dữ liệu: thống kê số ảnh phản hồi, nhãn bị sửa nhiều nhất và các cặp nhầm lẫn thường gặp.
 - Script trộn dữ liệu feedback vào dataset cho vòng train tiếp theo.
 
 ## Cấu trúc file
