@@ -6,6 +6,9 @@ from pathlib import Path
 import pandas as pd
 
 
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
 RISK_BY_GROUP = {
     "Nguy hại": ("Cao", "Không bỏ vào rác sinh hoạt; ưu tiên đưa tới điểm thu gom chuyên biệt."),
     "Hữu cơ": ("Thấp", "Có thể tách riêng để ủ compost hoặc bỏ vào thùng rác hữu cơ."),
@@ -65,11 +68,27 @@ def read_model_summary(models_dir: str | Path = "models", reports_dir: str | Pat
     classes_path = models_path / "class_names.json"
     if not classes_path.exists():
         classes_path = models_path / "best_model.classes.json"
-    dataset_path = reports_path / "dataset_distribution.csv"
+    dataset_candidates = [
+        reports_path / "dataset_distribution.csv",
+        models_path / "dataset_distribution.csv",
+    ]
+    dataset_path = next((path for path in dataset_candidates if path.exists()), None)
 
     comparison = pd.read_csv(comparison_path) if comparison_path.exists() else pd.DataFrame()
     classes = json.loads(classes_path.read_text(encoding="utf-8")) if classes_path.exists() else []
-    dataset = pd.read_csv(dataset_path) if dataset_path.exists() else pd.DataFrame()
+    dataset = pd.read_csv(dataset_path) if dataset_path else pd.DataFrame()
+    if dataset.empty:
+        local_data_dir = Path("garbage_classification")
+        if local_data_dir.exists():
+            rows = []
+            for class_dir in sorted(path for path in local_data_dir.iterdir() if path.is_dir()):
+                count = sum(
+                    1
+                    for path in class_dir.iterdir()
+                    if path.is_file() and path.suffix.lower() in IMAGE_EXTS
+                )
+                rows.append({"class": class_dir.name, "count": count})
+            dataset = pd.DataFrame(rows)
     best = comparison.sort_values("macro_f1", ascending=False).iloc[0].to_dict() if not comparison.empty else {}
     total_images = int(dataset["count"].sum()) if "count" in dataset else None
     return {

@@ -83,6 +83,8 @@ def render_model_information() -> None:
     cols = st.columns(2)
     cols[0].metric("Số lớp", len(info["classes"]) if info["classes"] else 0)
     cols[1].metric("Số ảnh dataset", info["total_images"] or "Chưa có")
+    if info["total_images"] is None:
+        st.caption("Chưa thấy `reports/dataset_distribution.csv`. Copy thư mục `reports` từ Drive vào runtime để hiện số ảnh dataset.")
 
     if not info["comparison"].empty:
         st.dataframe(info["comparison"], hide_index=True, use_container_width=True)
