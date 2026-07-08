@@ -14,6 +14,7 @@ from app_insights import disposal_conclusion, prediction_status, read_feedback_s
 from image_quality import assess_image_quality, multi_object_hint, recycling_cleanliness_hint
 from model_utils import load_class_names, make_gradcam_heatmap, overlay_gradcam, predict_image
 from reporting import append_prediction_log, build_html_report, save_html_report
+from session_planner import build_session_plan
 from waste_rules import VI_LABELS, get_waste_advice
 
 
@@ -105,6 +106,27 @@ def render_feedback_statistics() -> None:
         st.dataframe(stats["top_pairs"], hide_index=True, use_container_width=True)
     st.markdown("**Nhật ký phản hồi**")
     st.dataframe(stats["log"], hide_index=True, use_container_width=True)
+
+
+def render_session_plan(summary_df: pd.DataFrame) -> None:
+    plan = build_session_plan(summary_df)
+    st.subheader("Kế hoạch xử lý phiên này")
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Điểm phân loại", f"{plan['score']}/100")
+    col_b.metric("Tỷ lệ tái chế/tái sử dụng", f"{plan['recyclable_ratio'] * 100:.1f}%")
+    col_c.metric("Số nhóm cần chuẩn bị", len(plan["bucket_plan"]))
+
+    st.markdown("**Việc cần làm trước**")
+    for action in plan["priority_actions"]:
+        st.markdown(f"- {action}")
+
+    if not plan["bucket_plan"].empty:
+        st.markdown("**Phân thùng / tuyến xử lý**")
+        st.dataframe(plan["bucket_plan"], hide_index=True, use_container_width=True)
+
+    st.markdown("**Gợi ý bổ sung dữ liệu**")
+    for suggestion in plan["data_suggestions"]:
+        st.markdown(f"- {suggestion}")
 
 
 def save_feedback(uploaded_file, predicted_class: str, corrected_class: str, confidence: float) -> Path:
@@ -271,6 +293,7 @@ with classify_tab:
         group_df = summary_df["Nhóm"].value_counts().reset_index()
         group_df.columns = ["Nhóm", "Số lượng"]
         st.bar_chart(group_df, x="Nhóm", y="Số lượng")
+        render_session_plan(summary_df)
 
         csv_bytes = summary_df.to_csv(index=False).encode("utf-8-sig")
         html_report = build_html_report(summary_df)

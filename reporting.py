@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from session_planner import build_session_plan
+
 
 REPORT_DIR = Path("reports")
 
@@ -27,6 +29,7 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
     multi_object = int((summary_df.get("Nhiều vật thể", pd.Series(dtype=str)) == "Có thể").sum()) if total else 0
     group_counts = summary_df["Nhóm"].value_counts().to_dict() if total else {}
     conclusion = "Tất cả ảnh đều đủ tin cậy để tham khảo hướng xử lý." if uncertain == 0 else "Có ảnh cần kiểm tra lại trước khi xử lý rác."
+    plan = build_session_plan(summary_df)
 
     rows = []
     for _, row in summary_df.iterrows():
@@ -45,6 +48,18 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
         )
 
     group_items = "".join(f"<li>{html.escape(group)}: {count}</li>" for group, count in group_counts.items())
+    action_items = "".join(f"<li>{html.escape(action)}</li>" for action in plan["priority_actions"])
+    bucket_rows = []
+    for _, row in plan["bucket_plan"].iterrows():
+        bucket_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(row['Nhóm']))}</td>"
+            f"<td>{html.escape(str(row['Số ảnh']))}</td>"
+            f"<td>{html.escape(str(row['Ảnh liên quan']))}</td>"
+            f"<td>{html.escape(str(row['Việc cần làm']))}</td>"
+            "</tr>"
+        )
+    data_items = "".join(f"<li>{html.escape(item)}</li>" for item in plan["data_suggestions"])
     return f"""<!doctype html>
 <html lang="vi">
 <head>
@@ -74,6 +89,21 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
   </div>
   <h2>Kết luận phiên kiểm thử</h2>
   <p>{html.escape(conclusion)}</p>
+  <h2>Kế hoạch xử lý phiên này</h2>
+  <div class="cards">
+    <div class="card"><div>Điểm phân loại</div><div class="value">{plan['score']}/100</div></div>
+    <div class="card"><div>Tỷ lệ tái chế/tái sử dụng</div><div class="value">{plan['recyclable_ratio'] * 100:.1f}%</div></div>
+    <div class="card"><div>Số nhóm cần chuẩn bị</div><div class="value">{len(plan['bucket_plan'])}</div></div>
+  </div>
+  <h3>Việc cần làm trước</h3>
+  <ul>{action_items}</ul>
+  <h3>Phân thùng / tuyến xử lý</h3>
+  <table>
+    <thead><tr><th>Nhóm</th><th>Số ảnh</th><th>Ảnh liên quan</th><th>Việc cần làm</th></tr></thead>
+    <tbody>{''.join(bucket_rows)}</tbody>
+  </table>
+  <h3>Gợi ý bổ sung dữ liệu</h3>
+  <ul>{data_items}</ul>
   <h2>Phân bố nhóm rác</h2>
   <ul>{group_items}</ul>
   <h2>Chi tiết dự đoán</h2>

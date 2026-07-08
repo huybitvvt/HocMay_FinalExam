@@ -66,6 +66,7 @@ Model được chọn cho app là `EfficientNetB0` vì có macro-F1 và accuracy
 - Lưu feedback khi model dự đoán sai.
 - Xuất kết quả kiểm thử ra CSV/HTML.
 - Có tab xem thông tin model và thống kê feedback.
+- Tạo kế hoạch xử lý cho cả phiên ảnh: điểm phân loại, nhóm thùng cần chuẩn bị, việc cần làm trước và gợi ý bổ sung dữ liệu.
 
 ## Cấu trúc project
 
@@ -224,3 +225,4 @@ reports/danh_gia_ket_qua.md
 - Model cuối cùng là EfficientNetB0.
 - Một số lớp dễ nhầm: `plastic`, `metal`, `white-glass`, `paper`, `cardboard`.
 - App có thêm phần gợi ý xử lý rác, cảnh báo độ tin cậy thấp, Grad-CAM và feedback.
+- Điểm khác với app chỉ phân loại ảnh là có thêm phần tổng hợp cả phiên kiểm thử thành kế hoạch xử lý rác.
