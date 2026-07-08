@@ -1,131 +1,196 @@
-# Hệ thống phân loại rác thải qua ảnh và gợi ý xử lý rác
+# Hệ thống phân loại rác thải qua ảnh
 
-Đây là bản hoàn chỉnh phục vụ bảo vệ học phần Học máy và Khai phá dữ liệu. Hệ thống không chỉ phân loại ảnh rác bằng deep learning, mà còn đưa ra gợi ý xử lý rác bằng tiếng Việt, giải thích dự đoán bằng Grad-CAM, kiểm thử ảnh thực tế và lưu phản hồi để cải thiện dữ liệu.
+Project này dùng mô hình học sâu để phân loại ảnh rác thải và đưa ra gợi ý xử lý rác bằng tiếng Việt. Ngoài phần dự đoán nhãn, mình làm thêm giao diện Streamlit để thử ảnh thực tế, xem top-3 kết quả, xem Grad-CAM và lưu phản hồi nếu model dự đoán sai.
 
-## Chức năng đã có
+## Mục tiêu
 
-- Phân loại 12 lớp rác: `battery`, `biological`, `brown-glass`, `cardboard`, `clothes`, `green-glass`, `metal`, `paper`, `plastic`, `shoes`, `trash`, `white-glass`.
-- So sánh `MobileNetV2` và `EfficientNetB0` bằng `accuracy`, `macro_f1`, `weighted_f1`.
-- Xử lý lệch lớp bằng `class_weight`.
-- Fine-tuning transfer learning.
-- Xuất `classification_report`, `confusion_matrix`, biểu đồ accuracy/loss và bảng so sánh model.
-- Giao diện Streamlit tiếng Việt.
-- Upload một hoặc nhiều ảnh rác tự chụp, hoặc chụp trực tiếp bằng camera trình duyệt.
-- Gợi ý xử lý rác: tái chế, hữu cơ, nguy hại, tái sử dụng, rác khác.
-- Grad-CAM để giải thích vùng ảnh model chú ý.
-- Cảnh báo khi độ tin cậy thấp.
-- Cảnh báo khi top-1 và top-2 quá gần nhau, tránh ép nhãn khi mô hình chưa chắc chắn.
-- Đánh giá chất lượng ảnh: mờ, quá tối, quá sáng, tương phản thấp.
-- Cảnh báo ảnh có thể chứa nhiều vật thể; kết quả chỉ áp dụng cho vật thể nổi bật nhất.
-- Gợi ý độ sạch tái chế cho giấy, nhựa, kim loại, thủy tinh.
-- Khối kết luận xử lý rác: loại rác, nhóm xử lý, mức rủi ro, nơi bỏ, hành động cần làm.
-- Tab thông tin mô hình: model được chọn, accuracy, macro-F1, weighted-F1, số lớp và phân bố dataset.
-- Lưu nhật ký kiểm thử vào `reports/prediction_log.csv`.
-- Xuất CSV và HTML báo cáo kiểm thử, có thống kê nhóm rác, cảnh báo không chắc chắn và kết luận phiên kiểm thử.
-- Người dùng sửa nhãn sai, app lưu ảnh vào `feedback/` để tái huấn luyện.
-- Tab phản hồi dữ liệu: thống kê số ảnh phản hồi, nhãn bị sửa nhiều nhất và các cặp nhầm lẫn thường gặp.
-- Script trộn dữ liệu feedback vào dataset cho vòng train tiếp theo.
+- Phân loại ảnh rác vào 12 lớp.
+- So sánh MobileNetV2 và EfficientNetB0.
+- Chọn model tốt hơn dựa trên accuracy, macro-F1 và weighted-F1.
+- Gợi ý cách xử lý rác sau khi dự đoán.
+- Có giao diện để upload ảnh hoặc chụp ảnh bằng camera.
+- Có lưu feedback để bổ sung dữ liệu cho lần train sau.
 
-## Cấu trúc file
+## Dataset
+
+Dataset gồm 12 lớp:
+
+```text
+battery
+biological
+brown-glass
+cardboard
+clothes
+green-glass
+metal
+paper
+plastic
+shoes
+trash
+white-glass
+```
+
+Tổng số ảnh hiện tại: 15,515 ảnh.
+
+Dataset bị lệch lớp, ví dụ lớp `clothes` nhiều hơn khá nhiều so với các lớp như `brown-glass`, `green-glass`, `trash`. Vì vậy khi train mình dùng `class_weight`, và khi đánh giá không chỉ nhìn accuracy mà còn dùng thêm macro-F1.
+
+## Mô hình sử dụng
+
+Mình thử hai mô hình transfer learning:
+
+- MobileNetV2
+- EfficientNetB0
+
+Cả hai đều dùng pretrained ImageNet, sau đó fine-tune lại cho bài toán phân loại 12 lớp rác.
+
+Kết quả tốt nhất hiện tại:
+
+| Model | Accuracy | Macro-F1 | Weighted-F1 |
+| --- | ---: | ---: | ---: |
+| EfficientNetB0 | 0.9610 | 0.9456 | 0.9610 |
+| MobileNetV2 | 0.9465 | 0.9225 | 0.9466 |
+
+Model được chọn cho app là `EfficientNetB0` vì có macro-F1 và accuracy cao hơn.
+
+## Chức năng trong app
+
+- Upload một hoặc nhiều ảnh.
+- Chụp ảnh trực tiếp bằng camera trình duyệt.
+- Hiển thị nhãn dự đoán và độ tin cậy.
+- Hiển thị top-3 nhãn có xác suất cao nhất.
+- Gợi ý xử lý rác theo nhóm: tái chế, hữu cơ, nguy hại, tái sử dụng, rác khác.
+- Cảnh báo khi model chưa đủ chắc chắn.
+- Cảnh báo ảnh mờ, tối, quá sáng hoặc tương phản thấp.
+- Cảnh báo nếu ảnh có thể chứa nhiều vật thể.
+- Hiển thị Grad-CAM để xem vùng ảnh model chú ý.
+- Lưu feedback khi model dự đoán sai.
+- Xuất kết quả kiểm thử ra CSV/HTML.
+- Có tab xem thông tin model và thống kê feedback.
+
+## Cấu trúc project
 
 ```text
 hocmayfinalexam/
-  garbage_classification/          # dataset gốc
-  app.py                           # giao diện Streamlit
-  train_colab.py                   # train và so sánh model
-  analyze_dataset.py               # phân tích phân bố dataset
-  merge_feedback_dataset.py        # trộn dataset gốc với feedback
-  model_utils.py                   # inference và Grad-CAM
-  image_quality.py                 # đánh giá chất lượng ảnh
-  reporting.py                     # log và báo cáo HTML
-  waste_rules.py                   # luật xử lý rác tiếng Việt
-  garbage_waste_colab.ipynb        # notebook Colab
+  app.py
+  train_colab.py
+  analyze_dataset.py
+  evaluate_results.py
+  merge_feedback_dataset.py
+  model_utils.py
+  image_quality.py
+  app_insights.py
+  reporting.py
+  waste_rules.py
   requirements.txt
+  garbage_waste_colab.ipynb
+  docs/
 ```
 
-## Quy trình chạy trên Google Colab
+Thư mục dataset `garbage_classification/` không đưa lên GitHub vì có nhiều ảnh. Dataset để trên Google Drive.
 
-Khuyến nghị: code lấy từ GitHub, dataset lớn vẫn để Google Drive.
+## Chạy trên Google Colab
 
-1. Upload dataset lên Google Drive, ví dụ:
+Bật GPU trước:
 
 ```text
-/content/drive/MyDrive/HocMay_FinalExam/hocmayfinalexam/garbage_classification
+Runtime -> Change runtime type -> T4 GPU
 ```
 
-2. Trong Colab bật GPU: `Runtime` -> `Change runtime type` -> `T4 GPU`.
-3. Clone code từ GitHub:
+Clone code:
 
 ```bash
 !git clone https://github.com/huybitvvt/HocMay_FinalExam.git
 %cd HocMay_FinalExam
 ```
 
-4. Mount Drive:
+Mount Google Drive:
 
 ```python
 from google.colab import drive
 drive.mount('/content/drive')
 ```
 
-5. Khai báo đường dẫn dataset:
+Khai báo đường dẫn dataset:
 
 ```python
 DATA_DIR = '/content/drive/MyDrive/HocMay_FinalExam/hocmayfinalexam/garbage_classification'
 ```
 
-Nếu không chắc đường dẫn dataset:
+Nếu không nhớ đường dẫn:
 
 ```bash
-!find "/content/drive/MyDrive" -maxdepth 5 -type d -name "garbage_classification"
+!find "/content/drive/MyDrive" -maxdepth 6 -type d -name "garbage_classification"
 ```
 
-Hoặc chạy bằng lệnh:
+Cài thư viện:
 
 ```bash
-pip install -r requirements.txt
-python analyze_dataset.py --data-dir "$DATA_DIR" --out-dir reports
-python train_colab.py --data-dir "$DATA_DIR" --epochs 12 --batch-size 32 --models mobilenetv2 efficientnetb0
+!pip -q install -r requirements.txt
 ```
 
-Kết quả quan trọng nằm trong `models/` và `reports/`:
-
-- `models/best_model.keras`
-- `models/best_model.classes.json`
-- `models/model_comparison.csv`
-- `models/*_classification_report.csv`
-- `models/*_confusion_matrix.png`
-- `models/*_history.png`
-- `reports/dataset_distribution.csv`
-- `reports/dataset_distribution.png`
-- `reports/danh_gia_ket_qua.md`
-
-Sau khi train xong, chạy đánh giá tự động:
+Phân tích dataset:
 
 ```bash
-python evaluate_results.py --models-dir models --out-dir reports
+!python analyze_dataset.py --data-dir "$DATA_DIR" --out-dir reports
 ```
 
-Script này chọn model tốt nhất theo macro-F1, liệt kê lớp yếu, các cặp lớp dễ nhầm và cảnh báo nếu kết quả có dấu hiệu bất thường.
-
-## Chạy giao diện Streamlit
+Train model:
 
 ```bash
-streamlit run app.py
+!python train_colab.py --data-dir "$DATA_DIR" --epochs 12 --batch-size 32 --models mobilenetv2 efficientnetb0
 ```
 
-Trên Colab có thể chạy:
+Đánh giá kết quả sau train:
 
 ```bash
-pip install pyngrok
-streamlit run app.py --server.port 8501 --server.headless true
+!python evaluate_results.py --models-dir models --out-dir reports
 ```
+
+Lưu model và report vào Drive:
+
+```bash
+!mkdir -p "/content/drive/MyDrive/HocMay_FinalExam/results"
+!cp -r models reports "/content/drive/MyDrive/HocMay_FinalExam/results/"
+```
+
+## Chạy app Streamlit trên Colab
+
+Nếu đã train xong và đã lưu model vào Drive, lần sau không cần train lại. Chỉ cần clone code, copy model từ Drive rồi chạy app.
+
+```bash
+!git clone https://github.com/huybitvvt/HocMay_FinalExam.git || true
+%cd HocMay_FinalExam
+!git pull
+!pip -q install -r requirements.txt
+!cp -r "/content/drive/MyDrive/HocMay_FinalExam/results/models" .
+```
+
+Tải `cloudflared` để mở app:
+
+```bash
+!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+!chmod +x cloudflared
+```
+
+Chạy Streamlit:
+
+```bash
+!streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true > streamlit.log 2>&1 &
+```
+
+Mở tunnel:
+
+```bash
+!./cloudflared tunnel --url http://localhost:8501
+```
+
+Colab sẽ in ra link dạng `trycloudflare.com`, mở link đó để dùng app.
 
 ## Train lại với dữ liệu feedback
 
-Sau khi test bằng ảnh tự chụp, nếu model đoán sai thì sửa nhãn trong app. Ảnh sẽ được lưu vào `feedback/<class>/`.
+Khi test app, nếu model dự đoán sai thì có thể sửa nhãn và lưu ảnh vào `feedback/`.
 
-Tạo dataset mới đã trộn feedback:
+Tạo dataset mới có trộn feedback:
 
 ```bash
 python merge_feedback_dataset.py --base-dir garbage_classification --feedback-dir feedback --out-dir garbage_classification_with_feedback
@@ -137,27 +202,25 @@ Train lại:
 python train_colab.py --data-dir garbage_classification_with_feedback --epochs 12 --batch-size 32 --models mobilenetv2 efficientnetb0
 ```
 
-## Kịch bản demo khi bảo vệ
+## File kết quả cần dùng cho báo cáo
 
-1. Mở bảng phân bố dataset để chỉ ra dữ liệu lệch lớp và cách xử lý bằng `class_weight`.
-2. Mở bảng so sánh MobileNetV2/EfficientNetB0, chọn model theo `macro_f1`.
-3. Upload ảnh tự chụp rõ nét, trình bày dự đoán + top-3 xác suất.
-4. Mở Grad-CAM để giải thích model tập trung vào vật thể hay nền.
-5. Chỉ ra gợi ý xử lý rác: pin là nguy hại, giấy/nhựa/kim loại/thủy tinh là tái chế, hữu cơ có thể ủ compost.
-6. Upload ảnh mờ/tối để chứng minh hệ thống có cảnh báo chất lượng ảnh và độ tin cậy thấp.
-7. Cố tình chọn một ảnh model đoán sai, sửa nhãn và lưu vào `feedback/`.
-8. Trình bày script trộn feedback để train lại, thể hiện vòng lặp cải thiện dữ liệu.
-9. Xuất báo cáo HTML/CSV của phiên kiểm thử.
+Sau khi train xong, các file chính nằm trong `models/` và `reports/`:
 
-## Điểm khác biệt để nhấn mạnh
+```text
+models/best_model.keras
+models/best_model.classes.json
+models/model_comparison.csv
+models/efficientnetb0_confusion_matrix.png
+models/efficientnetb0_history.png
+reports/dataset_distribution.csv
+reports/dataset_distribution.png
+reports/danh_gia_ket_qua.md
+```
 
-- Có tính ứng dụng sau dự đoán: hệ thống gợi ý cách xử lý rác cụ thể, không dừng ở nhãn phân loại.
-- Có khả năng giải thích bằng Grad-CAM, giúp mô hình minh bạch hơn.
-- Có đánh giá chất lượng ảnh đầu vào, phù hợp tình huống người dùng chụp ảnh thực tế.
-- Có vòng lặp phản hồi dữ liệu: sửa nhãn sai, lưu ảnh, trộn vào dataset, train lại.
-- Có báo cáo kiểm thử tự động bằng CSV/HTML, phù hợp trình bày kết quả thực nghiệm.
-- Dùng `macro_f1` để đánh giá công bằng hơn khi dataset lệch lớp.
+## Ghi chú khi viết báo cáo
 
-## Lưu ý khi viết báo cáo
-
-Dataset hiện lệch lớp mạnh, ví dụ `clothes` nhiều hơn các lớp như `brown-glass`, `green-glass`, `trash`. Vì vậy không nên chỉ báo cáo accuracy. Cần đưa thêm macro-F1, confusion matrix và phân tích các cặp lớp dễ nhầm như `brown-glass`/`green-glass`/`white-glass`, `paper`/`cardboard`, `plastic`/`trash`.
+- Nên nói rõ dataset bị lệch lớp, nên dùng `class_weight`.
+- Không nên chỉ báo cáo accuracy, cần thêm macro-F1.
+- Model cuối cùng là EfficientNetB0.
+- Một số lớp dễ nhầm: `plastic`, `metal`, `white-glass`, `paper`, `cardboard`.
+- App có thêm phần gợi ý xử lý rác, cảnh báo độ tin cậy thấp, Grad-CAM và feedback.
