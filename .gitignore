@@ -1,10 +1,14 @@
 __pycache__/
 .ipynb_checkpoints/
 garbage_classification/
-models/
 feedback/
-reports/
 garbage_classification_with_feedback/
+streamlit.log
+cloudflared
 *.h5
-*.keras
 *.pyc
+
+# Không đưa các checkpoint/phụ bản model lên GitHub để repo gọn hơn.
+models/*_checkpoint.keras
+models/mobilenetv2.keras
+models/efficientnetb0.keras

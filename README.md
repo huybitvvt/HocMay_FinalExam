@@ -218,6 +218,62 @@ reports/dataset_distribution.png
 reports/danh_gia_ket_qua.md
 ```
 
+## Cấu trúc repo khi nộp GitHub
+
+Repo nộp nên có code, tài liệu, model tốt nhất và các file kết quả chính. Dataset ảnh gốc không đưa lên GitHub vì dung lượng lớn.
+
+```text
+HocMay_FinalExam/
+  app.py
+  train_colab.py
+  analyze_dataset.py
+  evaluate_results.py
+  requirements.txt
+  README.md
+  docs/
+  models/
+    best_model.keras
+    best_model.classes.json
+    class_names.json
+    model_comparison.csv
+    efficientnetb0_classification_report.csv
+    efficientnetb0_confusion_matrix.csv
+    efficientnetb0_confusion_matrix.png
+    efficientnetb0_history.csv
+    efficientnetb0_history.png
+    mobilenetv2_classification_report.csv
+    mobilenetv2_confusion_matrix.csv
+    mobilenetv2_confusion_matrix.png
+    mobilenetv2_history.csv
+    mobilenetv2_history.png
+  reports/
+    dataset_distribution.csv
+    dataset_distribution.png
+    danh_gia_ket_qua.md
+```
+
+Các file model phụ như checkpoint hoặc file model riêng của từng kiến trúc không cần đưa lên GitHub, vì app chỉ cần `models/best_model.keras`.
+
+Nếu cần đẩy kết quả train từ Colab lên GitHub:
+
+```bash
+%cd /content/HocMay_FinalExam
+!git pull
+!cp -r "/content/drive/MyDrive/HocMay_FinalExam/results/models" .
+!cp -r "/content/drive/MyDrive/HocMay_FinalExam/results/reports" .
+!git status --short
+```
+
+Nếu `best_model.keras` nhỏ hơn 100MB thì có thể commit trực tiếp:
+
+```bash
+!git add models reports README.md docs
+!git commit -m "Add trained results"
+!git push
+```
+
+Nếu GitHub báo file model quá 100MB thì không push trực tiếp file `.keras`; khi đó dùng Git LFS hoặc để model trên Google Drive và ghi link trong README.
+
 ## Ghi chú khi viết báo cáo
 
 - Nên nói rõ dataset bị lệch lớp, nên dùng `class_weight`.
