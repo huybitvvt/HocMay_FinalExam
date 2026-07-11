@@ -203,26 +203,6 @@ Train lại:
 python train_colab.py --data-dir garbage_classification_with_feedback --epochs 12 --batch-size 32 --models mobilenetv2 efficientnetb0
 ```
 
-## File kết quả cần dùng cho báo cáo
 
-Sau khi train xong, các file chính nằm trong `models/` và `reports/`:
 
-```text
-models/best_model.keras
-models/best_model.classes.json
-models/model_comparison.csv
-models/efficientnetb0_confusion_matrix.png
-models/efficientnetb0_history.png
-reports/dataset_distribution.csv
-reports/dataset_distribution.png
-reports/danh_gia_ket_qua.md
-```
 
-## Ghi chú khi viết báo cáo
-
-- Nên nói rõ dataset bị lệch lớp, nên dùng `class_weight`.
-- Không nên chỉ báo cáo accuracy, cần thêm macro-F1.
-- Model cuối cùng là EfficientNetB0.
-- Một số lớp dễ nhầm: `plastic`, `metal`, `white-glass`, `paper`, `cardboard`.
-- App có thêm phần gợi ý xử lý rác, cảnh báo độ tin cậy thấp, Grad-CAM và feedback.
-- Điểm khác với app chỉ phân loại ảnh là có thêm phần tổng hợp cả phiên kiểm thử thành kế hoạch xử lý rác.
