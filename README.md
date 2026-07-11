@@ -1,6 +1,6 @@
 # Hệ thống phân loại rác thải qua ảnh
 
-Project này dùng mô hình học sâu để phân loại ảnh rác thải và đưa ra gợi ý xử lý rác bằng tiếng Việt. Ngoài phần dự đoán nhãn, mình làm thêm giao diện Streamlit để thử ảnh thực tế, xem top-3 kết quả, xem Grad-CAM và lưu phản hồi nếu model dự đoán sai.
+Đề tài này xây dựng hệ thống phân loại rác thải từ ảnh và gợi ý cách xử lý rác bằng tiếng Việt. Ngoài phần dự đoán nhãn, nhóm em làm thêm giao diện Streamlit để thử ảnh thực tế, xem top-3 kết quả, xem Grad-CAM và lưu phản hồi nếu model dự đoán sai.
 
 ## Mục tiêu
 
@@ -32,11 +32,11 @@ white-glass
 
 Tổng số ảnh hiện tại: 15,515 ảnh.
 
-Dataset bị lệch lớp, ví dụ lớp `clothes` nhiều hơn khá nhiều so với các lớp như `brown-glass`, `green-glass`, `trash`. Vì vậy khi train mình dùng `class_weight`, và khi đánh giá không chỉ nhìn accuracy mà còn dùng thêm macro-F1.
+Dataset bị lệch lớp, ví dụ lớp `clothes` nhiều hơn khá nhiều so với các lớp như `brown-glass`, `green-glass`, `trash`. Vì vậy khi train nhóm em dùng `class_weight`, và khi đánh giá không chỉ nhìn accuracy mà còn dùng thêm macro-F1.
 
 ## Mô hình sử dụng
 
-Mình thử hai mô hình transfer learning:
+Nhóm em thử hai mô hình transfer learning:
 
 - MobileNetV2
 - EfficientNetB0
@@ -71,7 +71,7 @@ Model được chọn cho app là `EfficientNetB0` vì có macro-F1 và accuracy
 ## Cấu trúc project
 
 ```text
-hocmayfinalexam/
+HocMay_FinalExam/
   app.py
   train_colab.py
   analyze_dataset.py
@@ -80,18 +80,21 @@ hocmayfinalexam/
   model_utils.py
   image_quality.py
   app_insights.py
+  session_planner.py
   reporting.py
   waste_rules.py
   requirements.txt
   garbage_waste_colab.ipynb
   docs/
+  models/
+  reports/
 ```
 
-Thư mục dataset `garbage_classification/` không đưa lên GitHub vì có nhiều ảnh. Dataset để trên Google Drive.
+Dataset ảnh gốc không đưa trực tiếp vào repo vì dung lượng lớn.
 
 ## Chạy trên Google Colab
 
-Bật GPU trước:
+Bật GPU:
 
 ```text
 Runtime -> Change runtime type -> T4 GPU
@@ -117,12 +120,6 @@ Khai báo đường dẫn dataset:
 DATA_DIR = '/content/drive/MyDrive/HocMay_FinalExam/hocmayfinalexam/garbage_classification'
 ```
 
-Nếu không nhớ đường dẫn:
-
-```bash
-!find "/content/drive/MyDrive" -maxdepth 6 -type d -name "garbage_classification"
-```
-
 Cài thư viện:
 
 ```bash
@@ -141,51 +138,26 @@ Train model:
 !python train_colab.py --data-dir "$DATA_DIR" --epochs 12 --batch-size 32 --models mobilenetv2 efficientnetb0
 ```
 
-Đánh giá kết quả sau train:
+Đánh giá kết quả:
 
 ```bash
 !python evaluate_results.py --models-dir models --out-dir reports
 ```
 
-Lưu model và report vào Drive:
+## Chạy app Streamlit
+
+Chạy local:
 
 ```bash
-!mkdir -p "/content/drive/MyDrive/HocMay_FinalExam/results"
-!cp -r models reports "/content/drive/MyDrive/HocMay_FinalExam/results/"
+streamlit run app.py
 ```
 
-## Chạy app Streamlit trên Colab
-
-Nếu đã train xong và đã lưu model vào Drive, lần sau không cần train lại. Chỉ cần clone code, copy model từ Drive rồi chạy app.
+Chạy trên Colab:
 
 ```bash
-!git clone https://github.com/huybitvvt/HocMay_FinalExam.git || true
-%cd HocMay_FinalExam
-!git pull
 !pip -q install -r requirements.txt
-!cp -r "/content/drive/MyDrive/HocMay_FinalExam/results/models" .
+!streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
 ```
-
-Tải `cloudflared` để mở app:
-
-```bash
-!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
-!chmod +x cloudflared
-```
-
-Chạy Streamlit:
-
-```bash
-!streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true > streamlit.log 2>&1 &
-```
-
-Mở tunnel:
-
-```bash
-!./cloudflared tunnel --url http://localhost:8501
-```
-
-Colab sẽ in ra link dạng `trycloudflare.com`, mở link đó để dùng app.
 
 ## Train lại với dữ liệu feedback
 
@@ -203,70 +175,25 @@ Train lại:
 python train_colab.py --data-dir garbage_classification_with_feedback --epochs 12 --batch-size 32 --models mobilenetv2 efficientnetb0
 ```
 
+## Kết quả lưu trong repo
 
-
-
-## Cấu trúc repo khi nộp GitHub
-
-Repo nộp nên có code, tài liệu, model tốt nhất và các file kết quả chính. Dataset ảnh gốc không đưa lên GitHub vì dung lượng lớn.
+Các file kết quả chính:
 
 ```text
-HocMay_FinalExam/
-  app.py
-  train_colab.py
-  analyze_dataset.py
-  evaluate_results.py
-  requirements.txt
-  README.md
-  docs/
-  models/
-    best_model.keras
-    best_model.classes.json
-    class_names.json
-    model_comparison.csv
-    efficientnetb0_classification_report.csv
-    efficientnetb0_confusion_matrix.csv
-    efficientnetb0_confusion_matrix.png
-    efficientnetb0_history.csv
-    efficientnetb0_history.png
-    mobilenetv2_classification_report.csv
-    mobilenetv2_confusion_matrix.csv
-    mobilenetv2_confusion_matrix.png
-    mobilenetv2_history.csv
-    mobilenetv2_history.png
-  reports/
-    dataset_distribution.csv
-    dataset_distribution.png
-    danh_gia_ket_qua.md
+models/best_model.keras
+models/best_model.classes.json
+models/model_comparison.csv
+models/efficientnetb0_confusion_matrix.png
+models/efficientnetb0_history.png
+reports/dataset_distribution.csv
+reports/dataset_distribution.png
+reports/danh_gia_ket_qua.md
 ```
 
-Các file model phụ như checkpoint hoặc file model riêng của từng kiến trúc không cần đưa lên GitHub, vì app chỉ cần `models/best_model.keras`.
+## Ghi chú
 
-Nếu cần đẩy kết quả train từ Colab lên GitHub:
-
-```bash
-%cd /content/HocMay_FinalExam
-!git pull
-!cp -r "/content/drive/MyDrive/HocMay_FinalExam/results/models" .
-!cp -r "/content/drive/MyDrive/HocMay_FinalExam/results/reports" .
-!git status --short
-```
-
-Nếu `best_model.keras` nhỏ hơn 100MB thì có thể commit trực tiếp:
-
-```bash
-!git add models reports README.md docs
-!git commit -m "Add trained results"
-!git push
-```
-
-Nếu GitHub báo file model quá 100MB thì không push trực tiếp file `.keras`; khi đó dùng Git LFS hoặc để model trên Google Drive và ghi link trong README.
-
-## Ghi chú khi viết báo cáo
-
-- Nên nói rõ dataset bị lệch lớp, nên dùng `class_weight`.
-- Không nên chỉ báo cáo accuracy, cần thêm macro-F1.
 - Model cuối cùng là EfficientNetB0.
-- Một số lớp dễ nhầm: `plastic`, `metal`, `white-glass`, `paper`, `cardboard`.
-- App có thêm phần gợi ý xử lý rác, cảnh báo độ tin cậy thấp, Grad-CAM và feedback.
+- Dataset có lệch lớp nên nhóm em dùng `class_weight`.
+- Khi đánh giá model, nhóm em dùng thêm macro-F1 thay vì chỉ dựa vào accuracy.
+- Một số lớp dễ nhầm là `plastic`, `metal`, `white-glass`, `paper`, `cardboard`.
 - Điểm khác với app chỉ phân loại ảnh là có thêm phần tổng hợp cả phiên kiểm thử thành kế hoạch xử lý rác.
