@@ -1,208 +1,353 @@
-# Báo cáo tóm tắt đề tài
+# Nội dung bộ slide bảo vệ – phiên bản cập nhật
 
-## 1. Tên đề tài
+Bộ slide gồm 14 trang, bám đúng chức năng hiện có. Phần YOLO và nhận biết sạch/bẩn chỉ xuất hiện trong hướng phát triển, không trình bày như kết quả đã hoàn thành.
 
-Hệ thống phân loại rác thải qua ảnh và gợi ý xử lý rác.
+---
 
-Đề tài tập trung vào việc nhận diện loại rác từ ảnh, sau đó đưa ra hướng xử lý phù hợp như tái chế, rác hữu cơ, rác nguy hại, tái sử dụng hoặc rác còn lại. Ngoài phần phân loại ảnh, hệ thống còn có giao diện thử nghiệm để upload ảnh, chụp ảnh bằng camera, xem độ tin cậy, xem Grad-CAM và tổng hợp kế hoạch xử lý cho nhiều ảnh rác trong cùng một phiên.
+## Slide 1 – Tên đề tài
 
-## 2. Lý do chọn đề tài
+### Nội dung trên slide
 
-Phân loại rác tại nguồn là việc cần thiết nhưng trong thực tế không phải lúc nào người dùng cũng biết một loại rác nên bỏ vào nhóm nào. Một số loại như giấy và carton, các loại thủy tinh, nhựa và rác khác khá dễ nhầm. Vì vậy nhóm em chọn đề tài này để thử áp dụng học sâu vào bài toán phân loại rác qua ảnh, đồng thời bổ sung phần gợi ý xử lý để kết quả dự đoán có tính ứng dụng hơn.
+**HỆ THỐNG PHÂN LOẠI RÁC THẢI QUA ẢNH<br>
+VÀ GỢI Ý XỬ LÝ RÁC BẰNG HỌC SÂU**
 
-Nếu chỉ dừng ở việc model trả về nhãn, hệ thống sẽ khá giống nhiều bài phân loại ảnh khác. Vì vậy nhóm em phát triển thêm phần giao diện và phần tổng hợp xử lý rác sau dự đoán, để hệ thống gần với tình huống sử dụng thực tế hơn.
+*Từ nhận diện ảnh đến hướng xử lý thực tế*
 
-## 3. Mục tiêu thực hiện
+Học phần: Học máy và Khai phá dữ liệu
 
-- Xây dựng mô hình phân loại ảnh rác thành 12 lớp.
-- So sánh hai mô hình transfer learning là MobileNetV2 và EfficientNetB0.
-- Đánh giá model bằng accuracy, macro-F1 và weighted-F1.
-- Xây dựng giao diện Streamlit để thử ảnh thực tế.
-- Gợi ý cách xử lý rác sau khi dự đoán.
-- Hiển thị Grad-CAM để xem vùng ảnh model chú ý.
-- Cảnh báo khi ảnh đầu vào chưa tốt hoặc model chưa đủ chắc chắn.
-- Lưu phản hồi khi model dự đoán sai để có thể bổ sung dữ liệu cho lần train sau.
-- Tổng hợp nhiều ảnh thành một kế hoạch xử lý rác cho cả phiên kiểm thử.
+### Lời trình bày
 
-## 4. Dataset
+Nhóm em xây dựng hệ thống nhận diện ảnh rác thải vào 12 lớp. Sau khi dự đoán, hệ thống không chỉ trả về nhãn mà còn giải thích vùng model chú ý, cảnh báo ảnh chưa tốt và gợi ý cách xử lý rác bằng tiếng Việt.
 
-Dataset hiện có 15,515 ảnh, gồm 12 lớp:
+### Gợi ý hình ảnh
+
+- Một ảnh rác đầu vào.
+- Mũi tên đi qua model.
+- Kết quả gồm nhãn, xác suất và gợi ý xử lý.
+
+---
+
+## Slide 2 – Thành viên và phân công
+
+### Nội dung trên slide
+
+| Thành viên | Phân công chính |
+| --- | --- |
+| Nguyễn Doãn Huy | Trưởng nhóm, train model, so sánh MobileNetV2 và EfficientNetB0 |
+| Bùi Quốc Việt | Chuẩn bị dataset, phân tích phân bố và hỗ trợ Colab |
+| Đỗ Văn Đạt | Giao diện Streamlit, upload/camera và top-3 |
+| Vũ Thị Thu Hường | Luật gợi ý xử lý rác bằng tiếng Việt |
+| Trương Đức Đàm | Grad-CAM, thống kê kết quả và hỗ trợ báo cáo |
+
+### Lời trình bày
+
+Nhóm em chia công việc theo bốn phần: dữ liệu, mô hình, giao diện và giải thích kết quả. Các thành viên cùng kiểm thử app và hoàn thiện nội dung báo cáo.
+
+---
+
+## Slide 3 – Bài toán và mục tiêu
+
+### Nội dung trên slide
+
+**Vấn đề**
+
+- Người dùng dễ nhầm giấy với carton, nhựa với kim loại hoặc thủy tinh.
+- Biết tên loại rác chưa đủ, người dùng còn cần biết nên xử lý thế nào.
+
+**Mục tiêu**
+
+1. Phân loại ảnh rác thành 12 lớp.
+2. So sánh hai mô hình transfer learning.
+3. Gợi ý xử lý rác sau dự đoán.
+4. Tăng khả năng giải thích và kiểm tra kết quả.
+
+**Phạm vi hiện tại:** phân loại vật thể rác nổi bật trong ảnh.
+
+### Lời trình bày
+
+Trọng tâm của đề tài là bài toán phân loại ảnh. Phần gợi ý xử lý, Grad-CAM và kiểm tra ảnh được bổ sung để kết quả phân loại có ý nghĩa sử dụng rõ hơn.
+
+---
+
+## Slide 4 – Dataset và quy trình chuẩn bị dữ liệu
+
+### Nội dung trên slide
+
+**Dataset**
+
+- 15.515 ảnh.
+- 12 lớp rác.
+- Lệch lớp rõ rệt: `clothes` chiếm khoảng 34,32%, trong khi `brown-glass` khoảng 3,91%.
+
+**Chuẩn bị dữ liệu**
 
 ```text
-battery
-biological
-brown-glass
-cardboard
-clothes
-green-glass
-metal
-paper
-plastic
-shoes
-trash
-white-glass
+Ảnh gốc
+→ Resize 224×224
+→ Augmentation
+→ Chia train/validation theo từng lớp
+→ Tính class_weight
 ```
 
-Một điểm cần chú ý là dataset bị lệch lớp. Ví dụ lớp `clothes` có số ảnh nhiều hơn đáng kể so với các lớp như `brown-glass`, `green-glass`, `trash`. Nếu chỉ dùng accuracy thì kết quả có thể bị ảnh hưởng bởi các lớp nhiều ảnh. Vì vậy trong quá trình train nhóm em có dùng `class_weight`, và khi đánh giá có dùng thêm macro-F1 để xem model học có đều giữa các lớp hay không.
+Augmentation gồm: lật ngang, xoay nhẹ, zoom và thay đổi tương phản.
 
-## 5. Tiền xử lý và chia dữ liệu
+### Lời trình bày
 
-Ảnh được resize về kích thước 224x224 để phù hợp với MobileNetV2 và EfficientNetB0. Trong quá trình train, nhóm em dùng thêm augmentation như lật ảnh, xoay nhẹ, zoom và thay đổi tương phản để model đỡ phụ thuộc vào một kiểu ảnh cố định.
+Dataset bị lệch lớp khá mạnh nên nhóm em không chia dữ liệu một cách ngẫu nhiên trên toàn bộ ảnh. Nhóm em chia validation theo từng lớp và sử dụng `class_weight` để hạn chế model thiên về lớp có nhiều ảnh.
 
-Dữ liệu được chia thành tập train và validation. Phần chia validation được làm theo từng lớp để tránh trường hợp một số lớp bị thiếu hoặc quá ít trong tập validation. Đây là điểm quan trọng vì dataset bị lệch lớp, nếu chia không cẩn thận thì kết quả macro-F1 có thể không phản ánh đúng chất lượng model.
+### Gợi ý hình ảnh
 
-## 6. Mô hình sử dụng
+- Biểu đồ `reports/dataset_distribution.png`.
+- Làm nổi bật lớp `clothes`, `brown-glass`, `green-glass` và `trash`.
 
-Nhóm em thử hai mô hình:
+---
 
-- MobileNetV2
-- EfficientNetB0
+## Slide 5 – Mô hình và kết quả thực nghiệm
 
-Cả hai đều dùng transfer learning với trọng số pretrained trên ImageNet. Quy trình train gồm hai phần: đầu tiên train phần phân loại phía trên backbone, sau đó fine-tune một số lớp cuối để model thích nghi tốt hơn với ảnh rác trong dataset.
+### Nội dung trên slide
 
-EfficientNetB0 được chọn làm model chính cho app vì cho kết quả tốt hơn MobileNetV2 trên tập validation.
+**Hai mô hình**
 
-## 7. Kết quả hiện tại
-
-Kết quả so sánh model:
+- MobileNetV2.
+- EfficientNetB0.
+- Pretrained ImageNet.
+- Train head trước, sau đó fine-tune 30 lớp cuối.
 
 | Model | Accuracy | Macro-F1 | Weighted-F1 |
 | --- | ---: | ---: | ---: |
-| EfficientNetB0 | 0.9610 | 0.9456 | 0.9610 |
-| MobileNetV2 | 0.9465 | 0.9225 | 0.9466 |
+| **EfficientNetB0** | **0,9610** | **0,9456** | **0,9610** |
+| MobileNetV2 | 0,9465 | 0,9225 | 0,9466 |
 
-EfficientNetB0 đạt accuracy 96.10%, macro-F1 94.56% và weighted-F1 96.10%. Kết quả này tốt hơn MobileNetV2, nên nhóm em dùng EfficientNetB0 làm model chính.
+**Model được chọn: EfficientNetB0**
 
-Macro-F1 đạt 94.56% là kết quả quan trọng vì chỉ số này tính trung bình đều trên các lớp. Với dataset lệch lớp, macro-F1 giúp đánh giá công bằng hơn so với chỉ nhìn accuracy.
+### Lời trình bày
 
-## 8. Các lớp còn dễ nhầm
+EfficientNetB0 tốt hơn MobileNetV2 ở cả ba chỉ số. Nhóm em đặc biệt quan tâm macro-F1 vì chỉ số này tính F1 đều giữa 12 lớp, phù hợp hơn với dataset lệch lớp.
 
-Một số lớp vẫn có thể nhầm với nhau:
+---
 
-- `paper` và `cardboard`: vì đều là vật liệu giấy, hình dạng trong ảnh có thể gần giống nhau.
-- `brown-glass`, `green-glass`, `white-glass`: khác nhau chủ yếu ở màu sắc, dễ bị ảnh hưởng bởi ánh sáng.
-- `plastic`, `metal`, `white-glass`: có thể bị nhầm khi vật thể phản sáng hoặc nền ảnh quá sáng.
-- `clothes` và `shoes`: một số ảnh có vật liệu vải hoặc hình dạng không rõ.
+## Slide 6 – Phân tích lỗi và các lớp dễ nhầm
 
-Những lỗi này là hợp lý với bài toán ảnh thực tế, vì ảnh rác thường có nền phức tạp, ánh sáng không ổn định và vật thể có thể bị che khuất hoặc bị bẩn.
+### Nội dung trên slide
 
-## 9. Giao diện ứng dụng
+**Các lớp có F1 thấp hơn**
 
-Giao diện được làm bằng Streamlit. Các chức năng chính:
+| Lớp | F1-score |
+| --- | ---: |
+| `plastic` | 0,8922 |
+| `metal` | 0,8972 |
+| `white-glass` | 0,8984 |
+| `green-glass` | 0,9173 |
+| `paper` | 0,9340 |
 
-- Tải một hoặc nhiều ảnh.
-- Chụp ảnh trực tiếp bằng camera.
-- Hiển thị nhãn dự đoán, độ tin cậy và top-3 xác suất.
-- Gợi ý xử lý rác theo từng nhóm.
-- Hiển thị Grad-CAM.
-- Cảnh báo ảnh mờ, tối, quá sáng hoặc tương phản thấp.
-- Cảnh báo khi model chưa chắc chắn.
-- Cảnh báo ảnh có thể chứa nhiều vật thể.
-- Lưu phản hồi nếu model dự đoán sai.
-- Xuất kết quả kiểm thử ra CSV/HTML.
+**Một số nhầm lẫn lớn**
 
-Giao diện không chỉ phục vụ việc thử model, mà còn giúp kiểm tra nhanh ảnh thực tế và lưu lại kết quả kiểm thử.
+- `clothes → shoes`: 11 ảnh.
+- `plastic → green-glass`: 8 ảnh.
+- `white-glass → metal`: 8 ảnh.
+- `plastic → metal`: 7 ảnh.
+- `cardboard → paper`: 5 ảnh.
 
-## 10. Gợi ý xử lý rác
+### Lời trình bày
 
-Sau khi dự đoán, hệ thống không chỉ hiện nhãn mà còn đưa ra hướng xử lý. Ví dụ:
+Nhựa, kim loại và thủy tinh dễ nhầm khi vật thể phản sáng. Giấy và carton gần nhau về vật liệu. Quần áo và giày dép có thể cùng xuất hiện đặc trưng vải. Những kết quả này cho thấy accuracy cao nhưng vẫn cần xem confusion matrix và chỉ số từng lớp.
 
-- Pin được xếp vào nhóm rác nguy hại, cần đưa tới điểm thu gom pin hoặc rác điện tử.
-- Rác hữu cơ có thể tách riêng để ủ compost hoặc bỏ vào thùng hữu cơ.
-- Giấy, carton, nhựa, kim loại, thủy tinh được gợi ý theo hướng tái chế nếu đủ sạch.
-- Quần áo và giày dép được gợi ý tái sử dụng hoặc quyên góp nếu còn dùng được.
-- Rác khác được đưa vào nhóm còn lại, nhưng vẫn cần kiểm tra để tránh lẫn pin, hóa chất hoặc vật sắc nhọn.
+### Gợi ý hình ảnh
 
-Phần này giúp kết quả dự đoán có tính thực tế hơn, vì người dùng không chỉ biết ảnh thuộc lớp nào mà còn biết nên xử lý như thế nào.
+- `models/efficientnetb0_confusion_matrix.png`.
+- Chỉ đánh dấu 4–5 ô nhầm lẫn lớn, không đưa toàn bộ bảng classification report lên slide.
 
-## 11. Grad-CAM
+---
 
-Nhóm em thêm Grad-CAM để xem vùng ảnh mà model chú ý khi dự đoán. Nếu vùng heatmap tập trung vào vật thể rác thì dự đoán có vẻ hợp lý hơn. Nếu heatmap tập trung vào nền hoặc vùng không liên quan, có thể ảnh đó chưa tốt hoặc model đang học đặc trưng chưa đúng.
+## Slide 7 – Quy trình hoạt động của hệ thống
 
-Grad-CAM không làm tăng accuracy trực tiếp, nhưng giúp mô hình dễ giải thích hơn. Đây là điểm hữu ích khi trình bày kết quả của mô hình học sâu, vì CNN thường bị xem là khó giải thích.
-
-## 12. Cảnh báo độ tin cậy và chất lượng ảnh
-
-Trong thực tế, không nên ép model luôn phải đưa ra một kết luận chắc chắn. Vì vậy nhóm em thêm phần cảnh báo khi:
-
-- Độ tin cậy thấp.
-- Top-1 và top-2 quá gần nhau.
-- Ảnh bị mờ.
-- Ảnh quá tối hoặc quá sáng.
-- Độ tương phản thấp.
-- Ảnh có thể chứa nhiều vật thể.
-
-Khi gặp các trường hợp này, hệ thống vẫn đưa ra kết quả tham khảo nhưng sẽ báo người dùng nên kiểm tra lại hoặc chụp lại ảnh rõ hơn.
-
-## 13. Phần khác biệt chính của đề tài
-
-Điểm khác biệt lớn nhất hiện tại là hệ thống không chỉ phân loại từng ảnh riêng lẻ. Sau khi người dùng đưa nhiều ảnh vào, hệ thống sẽ tổng hợp thành một kế hoạch xử lý cho cả phiên ảnh.
-
-Phần kế hoạch xử lý gồm:
-
-- Điểm phân loại của phiên kiểm thử.
-- Tỷ lệ rác tái chế hoặc tái sử dụng.
-- Số nhóm rác cần chuẩn bị.
-- Việc cần làm trước, ví dụ rác nguy hại cần gom riêng.
-- Bảng phân thùng hoặc tuyến xử lý theo từng nhóm rác.
-- Gợi ý lớp nào nên bổ sung dữ liệu nếu phiên đó có nhiều ảnh chưa chắc chắn.
-
-Nhờ vậy, app không chỉ trả lời “ảnh này là gì”, mà còn hỗ trợ trả lời “với nhóm ảnh rác này thì nên xử lý như thế nào”.
-
-## 14. Feedback và cải thiện dữ liệu
-
-Trong app có phần phản hồi nếu model dự đoán sai. Người dùng có thể chọn lại nhãn đúng, sau đó hệ thống lưu ảnh vào thư mục `feedback/`. Các ảnh này có thể được trộn lại vào dataset bằng script `merge_feedback_dataset.py` để train lại ở lần sau.
-
-Phần này giúp hệ thống có một vòng lặp cải thiện dữ liệu:
+### Nội dung trên slide
 
 ```text
-Dự đoán -> phát hiện sai -> lưu feedback -> trộn dữ liệu -> train lại
+Upload ảnh / Camera
+        ↓
+Kiểm tra chất lượng ảnh
+        ↓
+EfficientNetB0 phân loại 12 lớp
+        ↓
+Nhãn + Confidence + Top-3
+        ↓
+Grad-CAM + Gợi ý xử lý
+        ↓
+Feedback + Báo cáo + Lịch sử
 ```
 
-Đây là cách đơn giản nhưng thực tế để cải thiện model dần theo dữ liệu mới.
+- **Đầu vào:** một hoặc nhiều ảnh.
+- **Đầu ra:** kết quả từng ảnh và kế hoạch xử lý cho cả phiên.
 
-## 15. Tiến độ hiện tại
+### Lời trình bày
 
-Đến hiện tại project đã hoàn thành các phần chính:
+App được xây dựng bằng Streamlit. Người dùng có thể tải nhiều ảnh hoặc chụp bằng camera. Mỗi ảnh được kiểm tra chất lượng, phân loại và đưa ra top-3. Sau đó hệ thống hiển thị Grad-CAM, hướng xử lý và lưu kết quả nếu người dùng cho phép.
 
-- Đã chuẩn bị dataset 12 lớp.
-- Đã train và so sánh MobileNetV2 với EfficientNetB0.
-- Đã chọn EfficientNetB0 làm model chính.
-- Đã có kết quả đánh giá model.
-- Đã có giao diện Streamlit.
-- Đã có upload ảnh và chụp ảnh bằng camera.
-- Đã có gợi ý xử lý rác.
-- Đã có Grad-CAM.
-- Đã có cảnh báo ảnh chưa tốt và model chưa chắc chắn.
-- Đã có lưu feedback.
-- Đã có xuất báo cáo CSV/HTML.
-- Đã có phần kế hoạch xử lý cho cả phiên ảnh.
+---
 
-## 16. Hạn chế hiện tại
+## Slide 8 – Giải thích và cơ chế cảnh báo
 
-Project vẫn còn một số hạn chế:
+### Nội dung trên slide
 
-- Model đang phân loại theo ảnh, chưa phát hiện nhiều vật thể riêng biệt trong cùng một ảnh.
-- Nếu ảnh có nhiều loại rác cùng lúc, hệ thống chỉ dự đoán theo vật thể nổi bật nhất.
-- Dataset chưa chắc đã phản ánh đầy đủ rác trong điều kiện thực tế ở Việt Nam.
-- Một số lớp gần nhau về vật liệu hoặc màu sắc vẫn có thể nhầm.
-- Grad-CAM chỉ hỗ trợ giải thích vùng chú ý, chưa phải là bằng chứng chắc chắn model hiểu đúng vật thể.
-- Phần gợi ý xử lý rác đang dựa trên luật được thiết kế thủ công, chưa cá nhân hóa theo từng địa phương.
+**Grad-CAM**
 
-## 17. Hướng phát triển tiếp
+- Cho biết vùng ảnh đóng góp mạnh vào dự đoán.
+- Giúp kiểm tra model chú ý vào vật thể hay nền ảnh.
 
-Nếu tiếp tục phát triển, nhóm em sẽ ưu tiên các hướng sau:
+**Cảnh báo**
 
-1. Thu thập thêm ảnh rác thực tế tại Việt Nam, đặc biệt là các lớp model còn dễ nhầm như nhựa, kim loại, thủy tinh và giấy/carton.
-2. Thêm object detection để phát hiện nhiều vật thể rác trong một ảnh, thay vì chỉ phân loại toàn ảnh.
-3. Thêm bản đồ hoặc danh sách điểm thu gom pin, rác điện tử theo khu vực.
-4. Cải thiện phần đánh giá độ sạch của rác tái chế, ví dụ phát hiện chai/hộp bị dính thức ăn hoặc dầu mỡ.
-5. Triển khai app ổn định hơn trên một nền tảng web thay vì chạy tạm qua Colab.
-6. Thêm cơ chế lưu lịch sử người dùng và thống kê lượng rác theo ngày/tuần.
-7. Tối ưu model để chạy nhẹ hơn trên điện thoại hoặc thiết bị cấu hình thấp.
+- Confidence thấp.
+- Top-1 và top-2 quá gần nhau.
+- Ảnh mờ, tối, quá sáng hoặc tương phản thấp.
+- Ảnh có dấu hiệu chứa nhiều vật thể.
 
-## 18. Kết luận
+> Cảnh báo nhiều vật thể hiện là heuristic dựa trên contour, chưa phải YOLO.
 
-Đề tài đã xây dựng được một hệ thống phân loại rác thải qua ảnh dựa trên mô hình học sâu. EfficientNetB0 cho kết quả tốt nhất với accuracy 96.10% và macro-F1 94.56%. Ngoài phần phân loại, hệ thống còn có giao diện thử nghiệm, gợi ý xử lý rác, Grad-CAM, cảnh báo độ tin cậy, lưu feedback và tổng hợp kế hoạch xử lý cho nhiều ảnh.
+### Lời trình bày
 
-Điểm nhóm em muốn nhấn mạnh là hệ thống không chỉ dừng ở nhận diện nhãn rác, mà cố gắng đưa kết quả dự đoán vào một quy trình xử lý rác thực tế hơn.
+Grad-CAM không chứng minh model hiểu ảnh giống con người, nhưng giúp quan sát vùng model đang sử dụng. Hệ thống cũng không ép mọi dự đoán đều đáng tin mà cảnh báo khi ảnh hoặc xác suất chưa đủ tốt.
+
+---
+
+## Slide 9 – Từ nhãn dự đoán đến hành động xử lý
+
+### Nội dung trên slide
+
+| Nhóm xử lý | Lớp tiêu biểu | Gợi ý |
+| --- | --- | --- |
+| Nguy hại | Pin | Gom riêng, đưa đến điểm thu gom pin/rác điện tử |
+| Hữu cơ | Rác sinh học | Tách riêng, có thể ủ compost |
+| Tái chế | Giấy, carton, nhựa, kim loại, thủy tinh | Làm sạch sơ, giữ khô, phân loại riêng |
+| Tái sử dụng | Quần áo, giày dép | Làm sạch, quyên góp hoặc thu hồi |
+| Rác khác | `trash` | Kiểm tra không lẫn pin, hóa chất hoặc vật sắc nhọn |
+
+### Lời trình bày
+
+Phần gợi ý được xây dựng bằng luật tiếng Việt theo từng lớp. Đây không phải một model ML thứ hai. Mục tiêu là chuyển kết quả phân loại thành hành động dễ hiểu, đồng thời cảnh báo riêng đối với rác nguy hại.
+
+---
+
+## Slide 10 – Các chức năng hỗ trợ đã hoàn thành
+
+### Nội dung trên slide
+
+**Kế hoạch theo phiên**
+
+- Tổng hợp nhiều ảnh theo nhóm xử lý.
+- Ưu tiên rác nguy hại.
+- Gợi ý thùng hoặc tuyến xử lý cần chuẩn bị.
+
+**Lịch sử**
+
+- Tách lịch sử theo tên người dùng.
+- Thống kê số lượt nhận diện theo tuần/tháng.
+- Xuất lịch sử ra CSV.
+
+**Điểm thu gom tham khảo**
+
+- Một số điểm tại Hà Nội và TP. Hồ Chí Minh.
+- Tính khoảng cách đường chim bay bằng công thức Haversine.
+
+### Lời trình bày
+
+Thống kê của nhóm em là số lượt ảnh được nhận diện, không phải khối lượng rác. Tên chỉ dùng để tách lịch sử, chưa phải tài khoản đăng nhập. Bản đồ là danh sách điểm tham khảo, không được trình bày là bản đồ toàn quốc.
+
+---
+
+## Slide 11 – Feedback loop và cải thiện dữ liệu
+
+### Nội dung trên slide
+
+```text
+1. Dự đoán
+      ↓
+2. Người dùng phát hiện sai
+      ↓
+3. Chọn lại nhãn đúng
+      ↓
+4. Lưu ảnh và feedback log
+      ↓
+5. Trộn vào dataset
+      ↓
+6. Train và đánh giá lại
+```
+
+**File hỗ trợ:** `merge_feedback_dataset.py`
+
+Feedback, lịch sử và báo cáo có thể lưu vào Google Drive khi chạy Colab.
+
+### Lời trình bày
+
+Feedback không làm model thay đổi ngay lập tức. Ảnh được lưu lại cùng nhãn người dùng sửa, sau đó nhóm em kiểm tra, trộn vào dataset và train lại. Cách này tránh việc đưa dữ liệu chưa kiểm duyệt trực tiếp vào model.
+
+---
+
+## Slide 12 – Hạn chế hiện tại
+
+### Nội dung trên slide
+
+1. Model phân loại toàn ảnh, phù hợp nhất khi ảnh có một vật thể chính.
+2. Chưa có bộ kiểm thử riêng gồm ảnh rác thực tế tại Việt Nam.
+3. Một số lớp gần nhau về màu sắc hoặc vật liệu vẫn còn nhầm.
+4. Cảnh báo nhiều vật thể hiện mới là heuristic.
+5. Gợi ý xử lý dựa trên luật chung, chưa cá nhân hóa theo quy định từng địa phương.
+6. App chạy thử nghiệm trên Colab nên phụ thuộc vào phiên runtime.
+7. Bản đồ mới có một số điểm tham khảo và chỉ tính khoảng cách đường chim bay.
+
+### Lời trình bày
+
+Nhóm em tách rõ kết quả đã đo được và phần chưa làm. Accuracy 96,10% là kết quả trên tập validation của dataset hiện tại, chưa có nghĩa model sẽ đạt tương tự với mọi ảnh rác ngoài thực tế.
+
+---
+
+## Slide 13 – Hướng phát triển
+
+### Nội dung trên slide
+
+**1. Dữ liệu thực tế tại Việt Nam**
+
+- Thu thập thêm ảnh nền phức tạp, ánh sáng khác nhau.
+- Tập trung vào nhựa, kim loại, thủy tinh, giấy và carton.
+
+**2. Phát hiện nhiều vật thể**
+
+- Gắn nhãn bounding box.
+- Train YOLO và đánh giá bằng precision, recall, mAP.
+
+**3. Nhận biết sạch/bẩn**
+
+- Xây dựng dataset `clean`, `dirty`, `uncertain`.
+- Chỉ tích hợp sau khi có macro-F1 và confusion matrix.
+
+**4. Web app ổn định**
+
+- Triển khai ngoài Colab để không phụ thuộc phiên runtime.
+
+### Lời trình bày
+
+Nhóm em đã xác định kiến trúc cho YOLO và model sạch/bẩn, nhưng chưa xem đây là kết quả hoàn thành vì chưa có dataset và weights được đánh giá. Ưu tiên đầu tiên vẫn là dữ liệu thực tế và kiểm thử ngoài dataset hiện tại.
+
+---
+
+## Slide 14 – Kết luận
+
+### Nội dung trên slide
+
+**EfficientNetB0**
+
+- Accuracy: **96,10%**
+- Macro-F1: **94,56%**
+- Weighted-F1: **96,10%**
+
+**Hệ thống hướng tới ba giá trị**
+
+1. **Nhận diện được** – phân loại 12 lớp và hiển thị top-3.
+2. **Giải thích được** – Grad-CAM và cảnh báo độ tin cậy.
+3. **Hành động được** – gợi ý xử lý, feedback và kế hoạch theo phiên.
+
+**Cảm ơn thầy/cô và các bạn đã lắng nghe.**
+
+### Lời trình bày
+
+Nhóm em đã hoàn thành phần cốt lõi là phân loại rác qua ảnh và gợi ý xử lý. Kết quả thực nghiệm cho thấy EfficientNetB0 tốt hơn MobileNetV2. Điểm khác biệt của hệ thống là kết hợp kết quả ML với khả năng giải thích, cảnh báo và hướng xử lý thực tế.
