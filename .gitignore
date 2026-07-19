@@ -13,3 +13,6 @@ data/user_history.csv
 models/*_checkpoint.keras
 models/mobilenetv2.keras
 models/efficientnetb0.keras
+models/waste_detector.pt
+models/cleanliness_model.keras
+models/yolo_runs/

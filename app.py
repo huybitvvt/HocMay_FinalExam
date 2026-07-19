@@ -11,9 +11,24 @@ import tensorflow as tf
 from PIL import Image
 
 from app_insights import disposal_conclusion, prediction_status, read_feedback_stats, read_model_summary
-from collection_points import google_maps_url, load_collection_points, rank_collection_points
+from app_paths import AppPaths, get_app_paths
+from cleanliness_model import (
+    RECYCLABLE_CLASSES,
+    cleanliness_advice,
+    load_cleanliness_class_names,
+    predict_cleanliness,
+)
+from collection_points import (
+    google_maps_url,
+    load_collection_points,
+    merge_collection_points,
+    rank_collection_points,
+    save_collection_points,
+    validate_collection_points,
+)
 from image_quality import assess_image_quality, multi_object_hint, recycling_cleanliness_hint
 from model_utils import load_class_names, make_gradcam_heatmap, overlay_gradcam, predict_image
+from object_detection import detect_objects, draw_detections, load_yolo_model
 from reporting import append_prediction_log, build_html_report, save_html_report
 from session_planner import build_session_plan
 from user_history import (
@@ -27,6 +42,7 @@ from waste_rules import VI_LABELS, get_waste_advice
 
 
 st.set_page_config(page_title="Phân loại rác thải", page_icon="♻", layout="wide")
+APP_PATHS = get_app_paths()
 
 
 @st.cache_resource
@@ -42,6 +58,16 @@ def load_model(model_file: str):
             compile=False,
             safe_mode=False,
         )
+
+
+@st.cache_resource
+def load_detection_model(model_file: str):
+    return load_yolo_model(model_file)
+
+
+@st.cache_resource
+def load_secondary_model(model_file: str):
+    return tf.keras.models.load_model(model_file, compile=False)
 
 
 def render_advice(class_name: str) -> None:
@@ -75,8 +101,8 @@ def render_conclusion(conclusion: dict) -> None:
     )
 
 
-def render_model_information() -> None:
-    info = read_model_summary()
+def render_model_information(paths: AppPaths) -> None:
+    info = read_model_summary(models_dir=paths.models_dir, reports_dir=paths.reports_dir)
     best = info["best"]
     st.subheader("Thông tin mô hình")
     if best:
@@ -100,8 +126,8 @@ def render_model_information() -> None:
         st.bar_chart(info["dataset"], x="class", y="count")
 
 
-def render_feedback_statistics() -> None:
-    stats = read_feedback_stats()
+def render_feedback_statistics(paths: AppPaths) -> None:
+    stats = read_feedback_stats(paths.feedback_dir)
     st.subheader("Phản hồi dữ liệu")
     st.metric("Số ảnh đã lưu phản hồi", stats["total"])
     if stats["total"] == 0:
@@ -139,8 +165,8 @@ def render_session_plan(summary_df: pd.DataFrame) -> None:
         st.markdown(f"- {suggestion}")
 
 
-def render_user_history(user_id: str) -> None:
-    history = read_user_history(user_id=user_id)
+def render_user_history(user_id: str, paths: AppPaths) -> None:
+    history = read_user_history(user_id=user_id, history_path=paths.history_path)
     st.subheader("Lịch sử phân loại của người dùng")
     st.caption(
         "Thống kê dựa trên số lượt ảnh đã nhận diện, không phải khối lượng rác theo kg. "
@@ -224,19 +250,48 @@ def render_user_history(user_id: str) -> None:
     )
 
 
-def render_collection_point_map() -> None:
+def render_collection_point_map(paths: AppPaths) -> None:
     st.subheader("Điểm thu gom pin và rác điện tử")
     st.caption(
         "Danh sách ban đầu được đối chiếu từ Việt Nam Tái Chế. "
         "Nên mở liên kết nguồn và xác nhận điểm còn hoạt động trước khi mang rác đến."
     )
     try:
-        points = load_collection_points()
+        points = load_collection_points(paths.collection_points_path)
     except ValueError as exc:
         st.error(f"Dữ liệu điểm thu gom chưa đúng định dạng: {exc}")
         return
+
+    with st.expander("Bổ sung dữ liệu điểm thu gom toàn quốc"):
+        st.caption(
+            "File CSV mới phải giữ đúng các cột của file mẫu. "
+            "Hệ thống loại bản ghi trùng theo tên và địa chỉ."
+        )
+        st.download_button(
+            "Tải file CSV mẫu",
+            points.head(0).to_csv(index=False).encode("utf-8-sig"),
+            file_name="mau_diem_thu_gom.csv",
+            mime="text/csv",
+        )
+        uploaded_points = st.file_uploader(
+            "Nhập CSV điểm thu gom đã xác minh",
+            type=["csv"],
+            key="collection_points_upload",
+        )
+        if uploaded_points is not None:
+            try:
+                incoming_points = validate_collection_points(pd.read_csv(uploaded_points))
+                points = merge_collection_points(points, incoming_points)
+                st.success(f"Đã đọc {len(incoming_points)} điểm hợp lệ từ file.")
+                if st.button("Lưu danh sách vào thư mục dữ liệu"):
+                    output_path = paths.storage_root / "data" / "collection_points.csv"
+                    saved_path = save_collection_points(points, output_path)
+                    st.success(f"Đã lưu {len(points)} điểm tại: {saved_path}")
+            except (ValueError, pd.errors.ParserError) as exc:
+                st.error(f"Không đọc được file điểm thu gom: {exc}")
+
     if points.empty:
-        st.info("Chưa có dữ liệu trong `data/collection_points.csv`.")
+        st.info(f"Chưa có dữ liệu điểm thu gom tại `{paths.collection_points_path}`.")
         return
 
     city = st.selectbox(
@@ -246,12 +301,36 @@ def render_collection_point_map() -> None:
     selected = points if city == "Tất cả" else points[points["city"] == city]
     selected = selected.reset_index(drop=True)
 
-    use_coordinates = st.checkbox(
-        "Tìm điểm gần tọa độ hiện tại",
-        help="Nhập tọa độ GPS từ điện thoại. App chưa tự xin quyền vị trí của trình duyệt.",
+    coordinate_mode = st.radio(
+        "Tìm điểm gần vị trí",
+        ["Không dùng vị trí", "GPS tự động", "Nhập tọa độ"],
+        horizontal=True,
     )
     ranked = selected.copy()
-    if use_coordinates:
+    latitude = None
+    longitude = None
+    if coordinate_mode == "GPS tự động":
+        try:
+            from streamlit_geolocation import streamlit_geolocation
+
+            location = streamlit_geolocation()
+            if isinstance(location, dict):
+                latitude = location.get("latitude")
+                longitude = location.get("longitude")
+                accuracy = location.get("accuracy")
+                if latitude is not None and longitude is not None:
+                    accuracy_note = f", sai số khoảng {accuracy:.0f} m" if accuracy else ""
+                    st.success(f"Đã nhận vị trí từ trình duyệt{accuracy_note}.")
+                else:
+                    st.info("Nhấn nút định vị và cho phép trình duyệt truy cập vị trí.")
+        except ImportError:
+            st.warning(
+                "Chưa cài thành phần GPS. Chạy `pip install -r requirements-extended.txt` "
+                "hoặc chọn nhập tọa độ."
+            )
+        except Exception as exc:
+            st.warning(f"Không lấy được GPS: {exc}. Có thể chuyển sang nhập tọa độ.")
+    elif coordinate_mode == "Nhập tọa độ":
         default_latitude = float(selected["latitude"].mean())
         default_longitude = float(selected["longitude"].mean())
         location_cols = st.columns(2)
@@ -269,6 +348,8 @@ def render_collection_point_map() -> None:
             value=default_longitude,
             format="%.6f",
         )
+
+    if latitude is not None and longitude is not None:
         ranked = rank_collection_points(selected, latitude, longitude)
         if not ranked.empty:
             nearest = ranked.iloc[0]
@@ -310,8 +391,14 @@ def render_collection_point_map() -> None:
     )
 
 
-def save_feedback(uploaded_file, predicted_class: str, corrected_class: str, confidence: float) -> Path:
-    feedback_dir = Path("feedback") / corrected_class
+def save_feedback(
+    uploaded_file,
+    predicted_class: str,
+    corrected_class: str,
+    confidence: float,
+    feedback_root: str | Path,
+) -> Path:
+    feedback_dir = Path(feedback_root) / corrected_class
     feedback_dir.mkdir(parents=True, exist_ok=True)
     file_bytes = uploaded_file.getvalue()
     digest = hashlib.sha1(file_bytes).hexdigest()[:10]
@@ -319,7 +406,7 @@ def save_feedback(uploaded_file, predicted_class: str, corrected_class: str, con
     image_path = feedback_dir / f"{datetime.now():%Y%m%d_%H%M%S}_{digest}{suffix}"
     image_path.write_bytes(file_bytes)
 
-    log_path = Path("feedback") / "feedback_log.csv"
+    log_path = Path(feedback_root) / "feedback_log.csv"
     row = pd.DataFrame(
         [
             {
@@ -340,7 +427,7 @@ st.caption("Dự đoán loại rác, gợi ý xử lý bằng tiếng Việt và
 
 with st.sidebar:
     st.header("Cấu hình")
-    model_path = st.text_input("Đường dẫn model", value="models/best_model.keras")
+    model_path = st.text_input("Đường dẫn model", value=str(APP_PATHS.model_path))
     confidence_threshold = st.slider("Ngưỡng cảnh báo độ tin cậy", 0.30, 0.95, 0.65, 0.05)
     show_gradcam = st.checkbox("Hiển thị Grad-CAM", value=True)
     save_session_log = st.checkbox("Lưu nhật ký kiểm thử", value=True)
@@ -350,19 +437,49 @@ with st.sidebar:
     user_id = normalize_user_id(user_name)
     save_history = st.checkbox("Lưu lịch sử phân loại", value=True)
     st.caption(f"Mã lịch sử: {user_id}")
+    st.divider()
+    st.header("Model mở rộng")
+    yolo_available = APP_PATHS.yolo_model_path.exists()
+    use_yolo = st.checkbox(
+        "Phát hiện nhiều vật thể bằng YOLO",
+        value=yolo_available,
+        disabled=not yolo_available,
+    )
+    if yolo_available:
+        yolo_confidence = st.slider("Ngưỡng YOLO", 0.10, 0.90, 0.35, 0.05)
+    else:
+        yolo_confidence = 0.35
+        st.caption(f"Chưa có weights: `{APP_PATHS.yolo_model_path}`")
+
+    cleanliness_available = APP_PATHS.cleanliness_model_path.exists()
+    use_cleanliness_model = st.checkbox(
+        "Đánh giá sạch/bẩn bằng model",
+        value=cleanliness_available,
+        disabled=not cleanliness_available,
+    )
+    if cleanliness_available:
+        cleanliness_confidence = st.slider("Ngưỡng độ sạch", 0.40, 0.95, 0.65, 0.05)
+    else:
+        cleanliness_confidence = 0.65
+        st.caption(f"Chưa có model: `{APP_PATHS.cleanliness_model_path}`")
+    st.divider()
+    st.subheader("Lưu trữ")
+    storage_label = "Google Drive / thư mục ngoài" if APP_PATHS.uses_external_storage else "Thư mục project"
+    st.caption(f"{storage_label}: `{APP_PATHS.storage_root}`")
+    st.caption("Đặt biến môi trường `APP_STORAGE_DIR` trước khi chạy app để đổi nơi lưu.")
 
 classify_tab, collection_tab, history_tab, model_tab, feedback_tab = st.tabs(
     ["Phân loại", "Điểm thu gom", "Lịch sử & thống kê", "Thông tin mô hình", "Phản hồi dữ liệu"]
 )
 
 with model_tab:
-    render_model_information()
+    render_model_information(APP_PATHS)
 
 with feedback_tab:
-    render_feedback_statistics()
+    render_feedback_statistics(APP_PATHS)
 
 with collection_tab:
-    render_collection_point_map()
+    render_collection_point_map(APP_PATHS)
 
 with classify_tab:
     upload_tab, camera_tab = st.tabs(["Tải ảnh", "Chụp ảnh"])
@@ -387,6 +504,22 @@ with classify_tab:
     else:
         model = load_model(str(model_file))
         class_names = load_class_names(model_file)
+        detection_model = None
+        if use_yolo:
+            try:
+                detection_model = load_detection_model(str(APP_PATHS.yolo_model_path))
+            except Exception as exc:
+                st.warning(f"Không tải được YOLO, app tiếp tục dùng phân loại ảnh: {exc}")
+
+        cleanliness_model = None
+        cleanliness_classes = []
+        if use_cleanliness_model:
+            try:
+                cleanliness_model = load_secondary_model(str(APP_PATHS.cleanliness_model_path))
+                cleanliness_classes = load_cleanliness_class_names(APP_PATHS.cleanliness_model_path)
+            except Exception as exc:
+                st.warning(f"Không tải được model sạch/bẩn, app tiếp tục dùng gợi ý sơ bộ: {exc}")
+
         summary_rows = []
 
         for idx, file in enumerate(input_files):
@@ -397,7 +530,51 @@ with classify_tab:
             status = prediction_status(result["ranking"], confidence_threshold)
             advice = get_waste_advice(result["class_name"])
             conclusion = disposal_conclusion(advice, result["confidence"], status)
-            cleanliness_hint = recycling_cleanliness_hint(result["class_name"], quality)
+            detections = []
+            if detection_model is not None:
+                try:
+                    detections = detect_objects(
+                        detection_model,
+                        image,
+                        confidence_threshold=yolo_confidence,
+                    )
+                    detected_count = len(detections)
+                    multi_object = {
+                        "object_like_count": detected_count,
+                        "has_warning": detected_count >= 2,
+                        "message": (
+                            f"YOLO phát hiện {detected_count} vật thể trong ảnh."
+                            if detected_count
+                            else "YOLO chưa phát hiện được vật thể phù hợp trong ảnh."
+                        ),
+                    }
+                except Exception as exc:
+                    st.warning(f"YOLO không xử lý được ảnh `{file.name}`: {exc}")
+
+            cleanliness_result = None
+            if cleanliness_model is not None and result["class_name"] in RECYCLABLE_CLASSES:
+                try:
+                    cleanliness_result = predict_cleanliness(
+                        cleanliness_model,
+                        image,
+                        cleanliness_classes,
+                    )
+                except Exception as exc:
+                    st.warning(f"Model sạch/bẩn không xử lý được ảnh `{file.name}`: {exc}")
+            if cleanliness_result is not None:
+                cleanliness_hint = cleanliness_advice(
+                    result["class_name"],
+                    cleanliness_result,
+                    cleanliness_confidence,
+                )
+                cleanliness_status = (
+                    f"{cleanliness_result['label']} "
+                    f"({cleanliness_result['confidence'] * 100:.1f}%)"
+                )
+            else:
+                cleanliness_hint = recycling_cleanliness_hint(result["class_name"], quality)
+                cleanliness_status = "Chưa đánh giá bằng model"
+
             warning_label = "Thấp" if status["is_uncertain"] else "OK"
             summary_rows.append(
                 {
@@ -411,6 +588,8 @@ with classify_tab:
                     "Kết luận xử lý": f"{conclusion['destination']} - {conclusion['action']}",
                     "Chất lượng ảnh": quality["verdict"],
                     "Nhiều vật thể": "Có thể" if multi_object["has_warning"] else "Không",
+                    "Số vật thể YOLO": len(detections) if detection_model is not None else "",
+                    "Độ sạch model": cleanliness_status,
                     "Gợi ý độ sạch": cleanliness_hint,
                     "Cảnh báo": warning_label,
                 }
@@ -419,6 +598,15 @@ with classify_tab:
             left, right = st.columns([1, 1.1], vertical_alignment="top")
             with left:
                 st.image(image, caption=file.name, use_container_width=True)
+                if detection_model is not None:
+                    if detections:
+                        st.image(
+                            draw_detections(image, detections),
+                            caption=f"YOLO: phát hiện {len(detections)} vật thể",
+                            use_container_width=True,
+                        )
+                    else:
+                        st.caption("YOLO chưa tìm thấy vật thể thuộc 12 lớp rác trong ảnh.")
                 if show_gradcam:
                     try:
                         heatmap = make_gradcam_heatmap(model, image)
@@ -446,6 +634,30 @@ with classify_tab:
                     st.warning(multi_object["message"])
                 else:
                     st.caption(multi_object["message"])
+                if detections:
+                    detection_rows = []
+                    for detection in detections:
+                        detection_advice = get_waste_advice(detection["class_name"])
+                        detection_rows.append(
+                            {
+                                "Vật thể": detection["label"],
+                                "Tin cậy": f"{detection['confidence'] * 100:.2f}%",
+                                "Nhóm": detection_advice["group"],
+                                "Nơi xử lý": detection_advice["bin"],
+                            }
+                        )
+                    st.markdown("**Các vật thể YOLO phát hiện**")
+                    st.dataframe(
+                        pd.DataFrame(detection_rows),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+                if cleanliness_result is not None:
+                    st.metric(
+                        "Độ sạch tái chế",
+                        cleanliness_result["label"],
+                        f"{cleanliness_result['confidence'] * 100:.1f}%",
+                    )
                 st.info(cleanliness_hint)
                 top3 = pd.DataFrame(result["ranking"][:3])
                 top3["Tên tiếng Việt"] = top3["class_name"].map(lambda name: get_waste_advice(name)["label"])
@@ -461,7 +673,13 @@ with classify_tab:
                         key=f"correct_{idx}_{file.name}",
                     )
                     if st.button("Lưu ảnh vào dữ liệu phản hồi", key=f"save_{idx}_{file.name}"):
-                        saved_path = save_feedback(file, result["class_name"], corrected_label, result["confidence"])
+                        saved_path = save_feedback(
+                            file,
+                            result["class_name"],
+                            corrected_label,
+                            result["confidence"],
+                            APP_PATHS.feedback_dir,
+                        )
                         st.success(f"Đã lưu: {saved_path}")
             st.divider()
 
@@ -472,7 +690,7 @@ with classify_tab:
         ).hexdigest()
         if save_session_log:
             if st.session_state.get("last_prediction_log_session") != session_key:
-                log_path = append_prediction_log(summary_rows)
+                log_path = append_prediction_log(summary_rows, APP_PATHS.reports_dir)
                 st.session_state["last_prediction_log_session"] = session_key
                 st.session_state["prediction_log_path"] = str(log_path)
             st.caption(f"Nhật ký kiểm thử: {st.session_state.get('prediction_log_path', 'chưa lưu')}")
@@ -482,6 +700,7 @@ with classify_tab:
                     summary_rows,
                     user_name=user_name,
                     session_id=session_key,
+                    history_path=APP_PATHS.history_path,
                 )
                 st.session_state["last_history_session"] = session_key
                 st.session_state["history_path"] = str(history_path)
@@ -519,8 +738,8 @@ with classify_tab:
             mime="text/html",
         )
         if st.button("Lưu báo cáo HTML vào thư mục reports"):
-            report_path = save_html_report(summary_df)
+            report_path = save_html_report(summary_df, APP_PATHS.reports_dir)
             st.success(f"Đã lưu báo cáo: {report_path}")
 
 with history_tab:
-    render_user_history(user_id)
+    render_user_history(user_id, APP_PATHS)
