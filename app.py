@@ -11,10 +11,18 @@ import tensorflow as tf
 from PIL import Image
 
 from app_insights import disposal_conclusion, prediction_status, read_feedback_stats, read_model_summary
+from collection_points import google_maps_url, load_collection_points, rank_collection_points
 from image_quality import assess_image_quality, multi_object_hint, recycling_cleanliness_hint
 from model_utils import load_class_names, make_gradcam_heatmap, overlay_gradcam, predict_image
 from reporting import append_prediction_log, build_html_report, save_html_report
 from session_planner import build_session_plan
+from user_history import (
+    append_user_history,
+    build_history_stats,
+    filter_history_period,
+    normalize_user_id,
+    read_user_history,
+)
 from waste_rules import VI_LABELS, get_waste_advice
 
 
@@ -131,6 +139,177 @@ def render_session_plan(summary_df: pd.DataFrame) -> None:
         st.markdown(f"- {suggestion}")
 
 
+def render_user_history(user_id: str) -> None:
+    history = read_user_history(user_id=user_id)
+    st.subheader("Lịch sử phân loại của người dùng")
+    st.caption(
+        "Thống kê dựa trên số lượt ảnh đã nhận diện, không phải khối lượng rác theo kg. "
+        "Phiên không lưu lịch sử sẽ không xuất hiện tại đây."
+    )
+    if history.empty:
+        st.info("Chưa có lịch sử cho người dùng này. Hãy phân loại ảnh và bật lưu lịch sử trong thanh bên.")
+        return
+
+    full_stats = build_history_stats(history)
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Tổng lượt ghi nhận", full_stats["total"])
+    metric_cols[1].metric("Tuần hiện tại", full_stats["this_week"])
+    metric_cols[2].metric("Tháng hiện tại", full_stats["this_month"])
+
+    detail_cols = st.columns(3)
+    detail_cols[0].metric("Tái chế / tái sử dụng", f"{full_stats['recyclable_ratio'] * 100:.1f}%")
+    detail_cols[1].metric("Rác nguy hại", full_stats["hazardous_count"])
+    detail_cols[2].metric("Cần kiểm tra lại", f"{full_stats['uncertain_rate'] * 100:.1f}%")
+
+    period_label = st.selectbox(
+        "Khoảng thời gian hiển thị",
+        ["7 ngày gần nhất", "30 ngày gần nhất", "Toàn bộ"],
+        index=1,
+        key=f"history_period_{user_id}",
+    )
+    period = {
+        "7 ngày gần nhất": "7_days",
+        "30 ngày gần nhất": "30_days",
+        "Toàn bộ": "all",
+    }[period_label]
+    selected = filter_history_period(history, period)
+    if selected.empty:
+        st.info(f"Không có lượt phân loại trong khoảng: {period_label.lower()}.")
+        return
+
+    selected_stats = build_history_stats(selected)
+    chart_left, chart_right = st.columns(2)
+    with chart_left:
+        st.markdown("**Số lượt nhận diện theo ngày**")
+        st.line_chart(selected_stats["daily"], x="Ngày", y="Số lượt")
+    with chart_right:
+        st.markdown("**Phân bố theo nhóm xử lý**")
+        st.bar_chart(selected_stats["groups"], x="Nhóm", y="Số lượt")
+
+    st.markdown("**Các loại rác được ghi nhận nhiều nhất**")
+    st.dataframe(selected_stats["classes"].head(12), hide_index=True, use_container_width=True)
+
+    display_history = selected.copy()
+    display_history["recorded_at"] = pd.to_datetime(
+        display_history["recorded_at"],
+        errors="coerce",
+        format="mixed",
+    ).dt.strftime("%d/%m/%Y %H:%M")
+    display_history["confidence"] = pd.to_numeric(
+        display_history["confidence"],
+        errors="coerce",
+    ).map(lambda value: f"{value * 100:.2f}%" if pd.notna(value) else "")
+    display_history = display_history.rename(
+        columns={
+            "recorded_at": "Thời gian",
+            "image_name": "Ảnh",
+            "prediction": "Dự đoán",
+            "group": "Nhóm",
+            "confidence": "Độ tin cậy",
+            "status": "Trạng thái",
+        }
+    )
+    st.markdown("**Chi tiết lịch sử**")
+    st.dataframe(
+        display_history[["Thời gian", "Ảnh", "Dự đoán", "Nhóm", "Độ tin cậy", "Trạng thái"]],
+        hide_index=True,
+        use_container_width=True,
+    )
+    st.download_button(
+        "Tải lịch sử CSV",
+        selected.to_csv(index=False).encode("utf-8-sig"),
+        file_name=f"lich_su_phan_loai_{user_id}.csv",
+        mime="text/csv",
+        key=f"download_history_{user_id}_{period}",
+    )
+
+
+def render_collection_point_map() -> None:
+    st.subheader("Điểm thu gom pin và rác điện tử")
+    st.caption(
+        "Danh sách ban đầu được đối chiếu từ Việt Nam Tái Chế. "
+        "Nên mở liên kết nguồn và xác nhận điểm còn hoạt động trước khi mang rác đến."
+    )
+    try:
+        points = load_collection_points()
+    except ValueError as exc:
+        st.error(f"Dữ liệu điểm thu gom chưa đúng định dạng: {exc}")
+        return
+    if points.empty:
+        st.info("Chưa có dữ liệu trong `data/collection_points.csv`.")
+        return
+
+    city = st.selectbox(
+        "Khu vực",
+        ["Tất cả", *sorted(points["city"].dropna().unique().tolist())],
+    )
+    selected = points if city == "Tất cả" else points[points["city"] == city]
+    selected = selected.reset_index(drop=True)
+
+    use_coordinates = st.checkbox(
+        "Tìm điểm gần tọa độ hiện tại",
+        help="Nhập tọa độ GPS từ điện thoại. App chưa tự xin quyền vị trí của trình duyệt.",
+    )
+    ranked = selected.copy()
+    if use_coordinates:
+        default_latitude = float(selected["latitude"].mean())
+        default_longitude = float(selected["longitude"].mean())
+        location_cols = st.columns(2)
+        latitude = location_cols[0].number_input(
+            "Vĩ độ",
+            min_value=-90.0,
+            max_value=90.0,
+            value=default_latitude,
+            format="%.6f",
+        )
+        longitude = location_cols[1].number_input(
+            "Kinh độ",
+            min_value=-180.0,
+            max_value=180.0,
+            value=default_longitude,
+            format="%.6f",
+        )
+        ranked = rank_collection_points(selected, latitude, longitude)
+        if not ranked.empty:
+            nearest = ranked.iloc[0]
+            st.success(
+                f"Gần nhất theo đường chim bay: {nearest['name']} "
+                f"({nearest['distance_km']:.2f} km)."
+            )
+            st.caption("Khoảng cách này không phải quãng đường di chuyển thực tế.")
+
+    map_frame = ranked.rename(columns={"latitude": "lat", "longitude": "lon"})
+    st.map(map_frame[["lat", "lon"]], use_container_width=True)
+
+    display_points = ranked.copy()
+    display_points["Bản đồ"] = display_points["address"].map(google_maps_url)
+    if "distance_km" in display_points:
+        display_points["Khoảng cách"] = display_points["distance_km"].map(lambda value: f"{value:.2f} km")
+    display_points = display_points.rename(
+        columns={
+            "name": "Điểm thu gom",
+            "city": "Thành phố",
+            "address": "Địa chỉ",
+            "accepted_waste": "Loại tiếp nhận",
+            "source_url": "Nguồn",
+            "verified_date": "Ngày đối chiếu",
+        }
+    )
+    visible_columns = ["Điểm thu gom", "Thành phố", "Địa chỉ", "Loại tiếp nhận"]
+    if "Khoảng cách" in display_points:
+        visible_columns.append("Khoảng cách")
+    visible_columns.extend(["Bản đồ", "Nguồn", "Ngày đối chiếu"])
+    st.dataframe(
+        display_points[visible_columns],
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Bản đồ": st.column_config.LinkColumn("Mở bản đồ", display_text="Mở"),
+            "Nguồn": st.column_config.LinkColumn("Nguồn", display_text="Kiểm tra"),
+        },
+    )
+
+
 def save_feedback(uploaded_file, predicted_class: str, corrected_class: str, confidence: float) -> Path:
     feedback_dir = Path("feedback") / corrected_class
     feedback_dir.mkdir(parents=True, exist_ok=True)
@@ -165,14 +344,25 @@ with st.sidebar:
     confidence_threshold = st.slider("Ngưỡng cảnh báo độ tin cậy", 0.30, 0.95, 0.65, 0.05)
     show_gradcam = st.checkbox("Hiển thị Grad-CAM", value=True)
     save_session_log = st.checkbox("Lưu nhật ký kiểm thử", value=True)
+    st.divider()
+    st.header("Lịch sử người dùng")
+    user_name = st.text_input("Tên người dùng", value="Khách")
+    user_id = normalize_user_id(user_name)
+    save_history = st.checkbox("Lưu lịch sử phân loại", value=True)
+    st.caption(f"Mã lịch sử: {user_id}")
 
-classify_tab, model_tab, feedback_tab = st.tabs(["Phân loại", "Thông tin mô hình", "Phản hồi dữ liệu"])
+classify_tab, collection_tab, history_tab, model_tab, feedback_tab = st.tabs(
+    ["Phân loại", "Điểm thu gom", "Lịch sử & thống kê", "Thông tin mô hình", "Phản hồi dữ liệu"]
+)
 
 with model_tab:
     render_model_information()
 
 with feedback_tab:
     render_feedback_statistics()
+
+with collection_tab:
+    render_collection_point_map()
 
 with classify_tab:
     upload_tab, camera_tab = st.tabs(["Tải ảnh", "Chụp ảnh"])
@@ -276,13 +466,30 @@ with classify_tab:
             st.divider()
 
         summary_df = pd.DataFrame(summary_rows)
+        session_payload = {"user_id": user_id, "rows": summary_rows}
+        session_key = hashlib.sha1(
+            json.dumps(session_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()
         if save_session_log:
-            session_key = hashlib.sha1(json.dumps(summary_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-            if st.session_state.get("last_logged_session") != session_key:
+            if st.session_state.get("last_prediction_log_session") != session_key:
                 log_path = append_prediction_log(summary_rows)
-                st.session_state["last_logged_session"] = session_key
-                st.session_state["last_log_path"] = str(log_path)
-            st.caption(f"Nhật ký kiểm thử: {st.session_state.get('last_log_path', 'chưa lưu')}")
+                st.session_state["last_prediction_log_session"] = session_key
+                st.session_state["prediction_log_path"] = str(log_path)
+            st.caption(f"Nhật ký kiểm thử: {st.session_state.get('prediction_log_path', 'chưa lưu')}")
+        if save_history:
+            if st.session_state.get("last_history_session") != session_key:
+                history_path, saved_count = append_user_history(
+                    summary_rows,
+                    user_name=user_name,
+                    session_id=session_key,
+                )
+                st.session_state["last_history_session"] = session_key
+                st.session_state["history_path"] = str(history_path)
+                st.session_state["history_saved_count"] = saved_count
+            st.caption(
+                f"Lịch sử người dùng: {st.session_state.get('history_path', 'chưa lưu')} "
+                f"({st.session_state.get('history_saved_count', 0)} lượt mới)"
+            )
 
         st.subheader("Tổng hợp kiểm thử")
         col_a, col_b, col_c, col_d = st.columns(4)
@@ -314,3 +521,6 @@ with classify_tab:
         if st.button("Lưu báo cáo HTML vào thư mục reports"):
             report_path = save_html_report(summary_df)
             st.success(f"Đã lưu báo cáo: {report_path}")
+
+with history_tab:
+    render_user_history(user_id)

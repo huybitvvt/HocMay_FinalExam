@@ -7,6 +7,7 @@ streamlit.log
 cloudflared
 *.h5
 *.pyc
+data/user_history.csv
 
 # Không đưa các checkpoint/phụ bản model lên GitHub để repo gọn hơn.
 models/*_checkpoint.keras
