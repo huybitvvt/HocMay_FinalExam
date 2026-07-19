@@ -102,12 +102,20 @@ def render_conclusion(conclusion: dict) -> None:
 
 
 def render_model_information(paths: AppPaths) -> None:
-    info = read_model_summary(models_dir=paths.models_dir, reports_dir=paths.reports_dir)
+    info = read_model_summary(
+        models_dir=paths.models_dir,
+        reports_dir=paths.reports_dir,
+        fallback_reports_dir=paths.project_root / "reports",
+    )
     best = info["best"]
     st.subheader("Thông tin mô hình")
     if best:
-        col_a, col_b, col_c, col_d = st.columns(4)
-        col_a.metric("Model đang chọn", str(best.get("model", "")).upper())
+        col_a, col_b, col_c, col_d = st.columns([1.35, 1, 1, 1])
+        model_name = str(best.get("model", "")).replace("efficientnetb0", "EfficientNetB0")
+        model_name = model_name.replace("mobilenetv2", "MobileNetV2")
+        with col_a:
+            st.caption("Model đang chọn")
+            st.markdown(f"### {model_name}")
         col_b.metric("Accuracy", f"{float(best.get('accuracy', 0)) * 100:.2f}%")
         col_c.metric("Macro-F1", f"{float(best.get('macro_f1', 0)) * 100:.2f}%")
         col_d.metric("Weighted-F1", f"{float(best.get('weighted_f1', 0)) * 100:.2f}%")
@@ -325,8 +333,8 @@ def render_collection_point_map(paths: AppPaths) -> None:
                     st.info("Nhấn nút định vị và cho phép trình duyệt truy cập vị trí.")
         except ImportError:
             st.warning(
-                "Chưa cài thành phần GPS. Chạy `pip install -r requirements-extended.txt` "
-                "hoặc chọn nhập tọa độ."
+                "Chưa cài thành phần GPS. Chạy lại `pip install -r requirements.txt` "
+                "rồi khởi động lại app, hoặc chọn nhập tọa độ."
             )
         except Exception as exc:
             st.warning(f"Không lấy được GPS: {exc}. Có thể chuyển sang nhập tọa độ.")

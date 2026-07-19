@@ -61,7 +61,11 @@ def disposal_conclusion(advice: dict, confidence: float, status: dict) -> dict:
     }
 
 
-def read_model_summary(models_dir: str | Path = "models", reports_dir: str | Path = "reports") -> dict:
+def read_model_summary(
+    models_dir: str | Path = "models",
+    reports_dir: str | Path = "reports",
+    fallback_reports_dir: str | Path | None = None,
+) -> dict:
     models_path = Path(models_dir)
     reports_path = Path(reports_dir)
     comparison_path = models_path / "model_comparison.csv"
@@ -72,6 +76,8 @@ def read_model_summary(models_dir: str | Path = "models", reports_dir: str | Pat
         reports_path / "dataset_distribution.csv",
         models_path / "dataset_distribution.csv",
     ]
+    if fallback_reports_dir is not None:
+        dataset_candidates.append(Path(fallback_reports_dir) / "dataset_distribution.csv")
     dataset_path = next((path for path in dataset_candidates if path.exists()), None)
 
     comparison = pd.read_csv(comparison_path) if comparison_path.exists() else pd.DataFrame()
