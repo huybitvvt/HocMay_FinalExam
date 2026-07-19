@@ -144,7 +144,7 @@ Cài thư viện:
 !pip -q install -r requirements.txt
 ```
 
-Nếu dùng YOLO và GPS tự động:
+Nếu train hoặc chạy YOLO:
 
 ```bash
 !pip -q install -r requirements-extended.txt
@@ -269,7 +269,7 @@ docker build -t waste-classifier .
 docker run --rm -p 8501:8501 -v /duong-dan/runtime:/app/runtime waste-classifier
 ```
 
-Bản mở rộng có YOLO và GPS:
+Bản mở rộng có YOLO:
 
 ```bash
 docker build --build-arg INSTALL_EXTENDED=true -t waste-classifier-extended .

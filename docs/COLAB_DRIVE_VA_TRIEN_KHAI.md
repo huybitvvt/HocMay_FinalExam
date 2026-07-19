@@ -62,7 +62,7 @@ Cài bản cơ bản:
 !pip -q install -r requirements.txt
 ```
 
-Cài bản mở rộng nếu dùng YOLO và GPS tự động:
+Cài bản mở rộng nếu train hoặc chạy YOLO:
 
 ```bash
 !pip -q install -r requirements-extended.txt
@@ -166,7 +166,7 @@ Build bản cơ bản:
 docker build -t waste-classifier .
 ```
 
-Build bản có YOLO và GPS:
+Build bản có YOLO:
 
 ```bash
 docker build --build-arg INSTALL_EXTENDED=true -t waste-classifier-extended .
