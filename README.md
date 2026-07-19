@@ -69,7 +69,11 @@ Model được chọn cho app là `EfficientNetB0` vì có macro-F1 và accuracy
 - Tạo kế hoạch xử lý cho cả phiên ảnh: điểm phân loại, nhóm thùng cần chuẩn bị, việc cần làm trước và gợi ý bổ sung dữ liệu.
 - Lưu lịch sử theo tên người dùng và thống kê số lượt rác theo tuần, tháng, nhóm xử lý.
 - Cho phép lọc và tải lịch sử của từng người dùng ra CSV.
-- Có bản đồ điểm thu gom pin/rác điện tử, lọc theo thành phố và xếp điểm gần tọa độ GPS.
+- Có bản đồ điểm thu gom pin/rác điện tử, GPS tự động hoặc nhập tọa độ và xếp điểm gần nhất.
+- Cho phép nhập CSV để mở rộng dữ liệu điểm thu gom mà không sửa code.
+- Hỗ trợ tùy chọn YOLO đa vật thể khi có `waste_detector.pt`.
+- Hỗ trợ tùy chọn model đánh giá sạch/bẩn khi có `cleanliness_model.keras`.
+- Có thể lưu feedback, lịch sử và báo cáo thẳng vào Google Drive qua `APP_STORAGE_DIR`.
 
 ## Cấu trúc project
 
@@ -83,12 +87,20 @@ HocMay_FinalExam/
   model_utils.py
   image_quality.py
   app_insights.py
+  app_paths.py
+  object_detection.py
+  cleanliness_model.py
   collection_points.py
   session_planner.py
   user_history.py
   reporting.py
   waste_rules.py
+  train_yolo.py
+  train_cleanliness.py
   requirements.txt
+  requirements-extended.txt
+  Dockerfile
+  configs/
   garbage_waste_colab.ipynb
   docs/
   models/
@@ -131,6 +143,23 @@ Cài thư viện:
 ```bash
 !pip -q install -r requirements.txt
 ```
+
+Nếu dùng YOLO và GPS tự động:
+
+```bash
+!pip -q install -r requirements-extended.txt
+```
+
+Cấu hình để feedback, lịch sử và báo cáo được lưu trực tiếp vào Google Drive:
+
+```python
+import os
+
+os.environ["APP_STORAGE_DIR"] = "/content/drive/MyDrive/HocMay_FinalExam/runtime"
+os.environ["APP_MODEL_PATH"] = "/content/drive/MyDrive/HocMay_FinalExam/runtime/models/best_model.keras"
+```
+
+Hướng dẫn đầy đủ: [`docs/COLAB_DRIVE_VA_TRIEN_KHAI.md`](docs/COLAB_DRIVE_VA_TRIEN_KHAI.md).
 
 Phân tích dataset:
 
@@ -207,7 +236,44 @@ Dữ liệu ban đầu nằm trong:
 data/collection_points.csv
 ```
 
-App cho phép lọc theo thành phố, nhập tọa độ GPS và xếp các điểm theo khoảng cách đường chim bay. Danh sách hiện chưa bao phủ toàn quốc. Địa chỉ được đối chiếu từ trang [Việt Nam Tái Chế](https://vietnamrecycles.com/gioi-thieu/dia-diem-thu-hoi); người dùng vẫn cần kiểm tra nguồn hoặc liên hệ đơn vị vận hành trước khi đến.
+App cho phép lọc theo thành phố, lấy GPS từ trình duyệt hoặc nhập tọa độ và xếp các điểm theo khoảng cách đường chim bay. Người dùng có thể nhập thêm file CSV điểm thu gom đã xác minh. Danh sách mặc định hiện chưa bao phủ toàn quốc. Địa chỉ được đối chiếu từ trang [Việt Nam Tái Chế](https://vietnamrecycles.com/gioi-thieu/dia-diem-thu-hoi); người dùng vẫn cần kiểm tra nguồn hoặc liên hệ đơn vị vận hành trước khi đến.
+
+## YOLO và model sạch/bẩn
+
+Code train và phần tích hợp vào Streamlit đã có sẵn, nhưng hai chức năng chỉ được bật khi có weights thật:
+
+```text
+models/waste_detector.pt
+models/cleanliness_model.keras
+models/cleanliness_model.classes.json
+```
+
+Train YOLO:
+
+```bash
+python train_yolo.py --data configs/waste_detection.yaml --out-dir models
+```
+
+Train model sạch/bẩn:
+
+```bash
+python train_cleanliness.py --data-dir /duong-dan/cleanliness_dataset --out-dir models
+```
+
+YOLO cần dataset bounding box. Model sạch/bẩn cần dataset riêng gồm `clean`, `dirty` và `uncertain`. Không thể dùng kết quả của hai chức năng này để báo cáo trước khi train và đánh giá weights.
+
+## Triển khai Docker
+
+```bash
+docker build -t waste-classifier .
+docker run --rm -p 8501:8501 -v /duong-dan/runtime:/app/runtime waste-classifier
+```
+
+Bản mở rộng có YOLO và GPS:
+
+```bash
+docker build --build-arg INSTALL_EXTENDED=true -t waste-classifier-extended .
+```
 
 ## Kết quả lưu trong repo
 
@@ -235,17 +301,17 @@ reports/danh_gia_ket_qua.md
 ## Hạn chế hiện tại
 
 - Dataset chưa có nhiều ảnh rác được chụp trong điều kiện thực tế tại Việt Nam.
-- Cảnh báo nhiều vật thể hiện dựa trên contour của ảnh, chưa phải Object Detection bằng YOLO.
-- Phần độ sạch mới chỉ đưa ra lưu ý từ chất lượng ảnh và loại rác; chưa có model riêng để nhận biết dầu mỡ hoặc thức ăn bám trên vật thể.
+- Pipeline YOLO đã có nhưng chưa có weights được train từ dataset bounding box của đề tài; khi thiếu weights app vẫn dùng cảnh báo contour.
+- Pipeline sạch/bẩn đã có nhưng chưa có dataset và weights đã đánh giá; khi thiếu model app chỉ đưa ra lưu ý sơ bộ.
 - Bản đồ mới có một số điểm thu gom ban đầu tại Hà Nội và TP. Hồ Chí Minh, chưa bao phủ toàn quốc.
-- Lịch sử đang lưu bằng CSV cục bộ, chưa có đăng nhập và chưa phù hợp cho nhiều người dùng đồng thời trên môi trường production.
+- Lịch sử có thể lưu vào Google Drive nhưng vẫn dùng CSV, chưa có đăng nhập và chưa phù hợp cho nhiều người dùng ghi đồng thời.
 - Thống kê hiện đếm số lượt nhận diện, chưa đo được khối lượng rác thực tế.
 
 ## Hướng phát triển tiếp
 
 1. Thu thập và gắn nhãn thêm ảnh rác thực tế tại Việt Nam, tập trung vào nhựa, kim loại và thủy tinh.
-2. Xây dựng dataset bounding box và huấn luyện YOLO để phát hiện nhiều vật thể trong một ảnh.
-3. Mở rộng dữ liệu điểm thu gom, bổ sung định vị tự động và quãng đường di chuyển thực tế.
-4. Thu thập nhãn sạch/bẩn để huấn luyện model phát hiện hộp dính dầu mỡ hoặc thức ăn.
-5. Tách phần suy luận thành API, triển khai web app ổn định và chuyển dữ liệu lịch sử sang cơ sở dữ liệu.
+2. Gắn nhãn dataset bounding box, train YOLO và báo cáo precision, recall, mAP@50, mAP@50–95.
+3. Mở rộng CSV điểm thu gom đã xác minh và bổ sung quãng đường di chuyển thực tế.
+4. Thu thập nhãn sạch/bẩn, train model và báo cáo macro-F1 cùng confusion matrix.
+5. Triển khai Docker trên máy chủ, tách phần suy luận thành API và chuyển lịch sử sang cơ sở dữ liệu.
 6. Sau khi có dữ liệu trọng lượng hoặc số lượng vật thể đáng tin cậy, mở rộng thống kê theo tuần/tháng thành báo cáo lượng rác.

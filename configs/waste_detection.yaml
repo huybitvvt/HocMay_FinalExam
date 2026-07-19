@@ -1,0 +1,23 @@
+# Thay `path` bằng thư mục dataset bounding box trên Google Drive.
+# Cấu trúc:
+# waste_detection_dataset/
+#   images/train, images/val, images/test
+#   labels/train, labels/val, labels/test
+path: /content/drive/MyDrive/HocMay_FinalExam/waste_detection_dataset
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: battery
+  1: biological
+  2: brown-glass
+  3: cardboard
+  4: clothes
+  5: green-glass
+  6: metal
+  7: paper
+  8: plastic
+  9: shoes
+  10: trash
+  11: white-glass

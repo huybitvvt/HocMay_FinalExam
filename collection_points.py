@@ -21,14 +21,7 @@ POINT_COLUMNS = [
 ]
 
 
-def load_collection_points(
-    points_path: str | Path = DEFAULT_POINTS_PATH,
-) -> pd.DataFrame:
-    path = Path(points_path)
-    if not path.exists():
-        return pd.DataFrame(columns=POINT_COLUMNS)
-
-    frame = pd.read_csv(path)
+def validate_collection_points(frame: pd.DataFrame) -> pd.DataFrame:
     missing = [column for column in POINT_COLUMNS if column not in frame]
     if missing:
         raise ValueError("Thiếu cột dữ liệu điểm thu gom: " + ", ".join(missing))
@@ -41,6 +34,46 @@ def load_collection_points(
         & frame["longitude"].between(-180, 180)
     )
     return frame[valid_coordinates].reset_index(drop=True)
+
+
+def load_collection_points(
+    points_path: str | Path = DEFAULT_POINTS_PATH,
+) -> pd.DataFrame:
+    path = Path(points_path)
+    if not path.exists():
+        return pd.DataFrame(columns=POINT_COLUMNS)
+    return validate_collection_points(pd.read_csv(path))
+
+
+def merge_collection_points(
+    current: pd.DataFrame,
+    incoming: pd.DataFrame,
+) -> pd.DataFrame:
+    merged = pd.concat(
+        [
+            validate_collection_points(current),
+            validate_collection_points(incoming),
+        ],
+        ignore_index=True,
+    )
+    merged["_dedupe_name"] = merged["name"].astype(str).str.strip().str.casefold()
+    merged["_dedupe_address"] = merged["address"].astype(str).str.strip().str.casefold()
+    merged = merged.drop_duplicates(
+        subset=["_dedupe_name", "_dedupe_address"],
+        keep="last",
+    )
+    return merged.drop(columns=["_dedupe_name", "_dedupe_address"]).reset_index(drop=True)
+
+
+def save_collection_points(
+    frame: pd.DataFrame,
+    points_path: str | Path,
+) -> Path:
+    path = Path(points_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    validated = validate_collection_points(frame)
+    validated.to_csv(path, index=False, encoding="utf-8-sig")
+    return path
 
 
 def distance_km(

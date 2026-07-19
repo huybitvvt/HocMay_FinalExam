@@ -12,9 +12,10 @@ from session_planner import build_session_plan
 REPORT_DIR = Path("reports")
 
 
-def append_prediction_log(rows: list[dict]) -> Path:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = REPORT_DIR / "prediction_log.csv"
+def append_prediction_log(rows: list[dict], report_dir: str | Path = REPORT_DIR) -> Path:
+    output_dir = Path(report_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_path = output_dir / "prediction_log.csv"
     df = pd.DataFrame(rows)
     df.insert(0, "time", datetime.now().isoformat(timespec="seconds"))
     df.to_csv(log_path, mode="a", header=not log_path.exists(), index=False, encoding="utf-8-sig")
@@ -117,8 +118,9 @@ def build_html_report(summary_df: pd.DataFrame, title: str = "Báo cáo kiểm t
 </html>"""
 
 
-def save_html_report(summary_df: pd.DataFrame) -> Path:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = REPORT_DIR / f"bao_cao_kiem_thu_{datetime.now():%Y%m%d_%H%M%S}.html"
+def save_html_report(summary_df: pd.DataFrame, report_dir: str | Path = REPORT_DIR) -> Path:
+    output_dir = Path(report_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / f"bao_cao_kiem_thu_{datetime.now():%Y%m%d_%H%M%S}.html"
     report_path.write_text(build_html_report(summary_df), encoding="utf-8")
     return report_path

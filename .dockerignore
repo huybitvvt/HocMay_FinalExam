@@ -1,0 +1,14 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+.ipynb_checkpoints
+garbage_classification
+garbage_classification_with_feedback
+feedback
+data/user_history.csv
+tmp_slide_preview
+OpenSpec
+models/*_checkpoint.keras
+models/mobilenetv2.keras
+models/efficientnetb0.keras
